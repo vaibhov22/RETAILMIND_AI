@@ -16,4 +16,4 @@ RetailMind AI turns invoices into business intelligence — automatically.
 - **Copilot** — ask any question about your business in plain English
 """)
 
-st.info("Backend API: http://127.0.0.1:8000 — make sure your FastAPI server is running.")
+st.info("Backend API: https://retailmind-ai-7h7v.onrender.com")
