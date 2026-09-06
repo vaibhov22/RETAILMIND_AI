@@ -1,6 +1,8 @@
 import streamlit as st
 import requests
+from auth import require_auth
 
+require_auth()
 API_URL = "https://retailmind-ai-7h7v.onrender.com"
 
 st.title("👤 Customer Profile")
