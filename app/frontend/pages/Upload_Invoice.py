@@ -1,7 +1,7 @@
 import streamlit as st
 import requests
 
-API_URL = "http://127.0.0.1:8000"
+API_URL = "https://retailmind-ai-7h7v.onrender.com"
 
 st.title("📤 Upload Invoice")
 st.write("Upload a photo of an invoice — RetailMind will read it and save it automatically.")
