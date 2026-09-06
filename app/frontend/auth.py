@@ -1,14 +1,53 @@
 import streamlit as st
-from supabase import create_client
+import httpx
 
 
 SUPABASE_URL = st.secrets["supabase"]["url"]
 SUPABASE_KEY = st.secrets["supabase"]["key"]
 
-supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+def supabase_headers():
+    return {
+        "apikey": SUPABASE_KEY,
+        "Content-Type": "application/json",
+    }
+
+
+def send_otp(email):
+    url = f"{SUPABASE_URL}/auth/v1/otp"
+
+    response = httpx.post(
+        url,
+        headers=supabase_headers(),
+        json={
+            "email": email,
+            "create_user": True,
+        },
+        timeout=20,
+    )
+
+    return response
+
+
+def verify_otp(email, token):
+    url = f"{SUPABASE_URL}/auth/v1/verify"
+
+    response = httpx.post(
+        url,
+        headers=supabase_headers(),
+        json={
+            "email": email,
+            "token": token,
+            "type": "email",
+        },
+        timeout=20,
+    )
+
+    return response
 
 
 def login_page():
+
     st.title("🛒 RetailMind AI")
     st.subheader("Login to continue")
 
@@ -18,25 +57,24 @@ def login_page():
     )
 
     if st.button("📧 Send OTP", use_container_width=True):
+
         if not email:
             st.warning("Please enter your email address.")
             return
 
         try:
-            supabase.auth.sign_in_with_otp(
-                {
-                    "email": email,
-                    "options": {
-                        "should_create_user": True
-                    }
-                }
-            )
+            response = send_otp(email)
 
-            st.session_state.otp_email = email
-            st.success("OTP sent! Check your email.")
+            if response.status_code in (200, 201):
+                st.session_state.otp_email = email
+                st.success("OTP sent! Check your email.")
+            else:
+                st.error(
+                    f"Failed to send OTP: {response.json().get('msg', response.text)}"
+                )
 
         except Exception as e:
-            st.error(f"Failed to send OTP: {e}")
+            st.error(f"Connection error: {e}")
 
     if "otp_email" in st.session_state:
 
@@ -47,22 +85,34 @@ def login_page():
         )
 
         if st.button("✅ Verify OTP", use_container_width=True):
+
             try:
-                response = supabase.auth.verify_otp(
-                    {
-                        "email": st.session_state.otp_email,
-                        "token": otp,
-                        "type": "email"
-                    }
+                response = verify_otp(
+                    st.session_state.otp_email,
+                    otp
                 )
 
-                if response.user:
-                    st.session_state.user = response.user
+                if response.status_code == 200:
+
+                    data = response.json()
+
+                    st.session_state.user = data.get("user")
+                    st.session_state.access_token = data.get(
+                        "access_token"
+                    )
+
                     st.session_state.pop("otp_email", None)
+
                     st.rerun()
 
-            except Exception:
-                st.error("Invalid or expired OTP.")
+                else:
+                    st.error(
+                        f"Invalid or expired OTP: "
+                        f"{response.json().get('msg', response.text)}"
+                    )
+
+            except Exception as e:
+                st.error(f"Verification error: {e}")
 
 
 def require_auth():
@@ -73,10 +123,6 @@ def require_auth():
 
 
 def logout():
-    try:
-        supabase.auth.sign_out()
-    except Exception:
-        pass
 
     st.session_state.clear()
     st.rerun()
