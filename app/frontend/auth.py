@@ -73,7 +73,6 @@ def require_auth():
 
 
 def logout():
-
     try:
         supabase.auth.sign_out()
     except Exception:
