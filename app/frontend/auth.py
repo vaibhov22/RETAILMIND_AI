@@ -5,7 +5,7 @@ import httpx
 SUPABASE_URL = st.secrets["supabase"]["url"]
 SUPABASE_KEY = st.secrets["supabase"]["key"]
 
-
+st.write("DEBUG URL:", repr(SUPABASE_URL))
 def supabase_headers():
     return {
         "apikey": SUPABASE_KEY,
