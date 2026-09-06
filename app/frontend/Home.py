@@ -1,4 +1,13 @@
 import streamlit as st
+from auth import require_auth, logout
+
+st.set_page_config(
+    page_title="RetailMind AI",
+    page_icon="🛒",
+    layout="wide"
+)
+
+require_auth()
 
 st.set_page_config(page_title="RetailMind AI", page_icon="🛒", layout="wide")
 
@@ -17,3 +26,5 @@ RetailMind AI turns invoices into business intelligence — automatically.
 """)
 
 st.info("Backend API: https://retailmind-ai-7h7v.onrender.com")
+
+st.sidebar.button("🚪 Logout", on_click=logout)
