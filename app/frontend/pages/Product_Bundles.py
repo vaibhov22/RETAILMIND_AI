@@ -9,15 +9,29 @@ st.title("🔗 Product Bundle Suggestions")
 st.write("Products that customers frequently buy together.")
 
 with st.spinner("Analyzing purchase patterns..."):
-    response = requests.get(f"{API_URL}/product-bundles")
+
+    headers = {
+        "Authorization": f"Bearer {st.session_state.access_token}"
+    }
+
+    response = requests.get(
+        f"{API_URL}/product-bundles",
+        headers=headers
+    )
 
 if response.status_code == 200:
     bundles = response.json()
 
     if bundles:
         for b in bundles:
-            st.write(f"**{b['product_1']}** + **{b['product_2']}** — bought together {b['times_bought_together']} times")
+            st.write(
+                f"**{b['product_1']}** + **{b['product_2']}** — "
+                f"bought together {b['times_bought_together']} times"
+            )
     else:
-        st.info("Not enough data yet to find bundle patterns. Upload more invoices with overlapping products.")
+        st.info(
+            "Not enough data yet to find bundle patterns. "
+            "Upload more invoices with overlapping products."
+        )
 else:
     st.error("Could not load bundle data.")

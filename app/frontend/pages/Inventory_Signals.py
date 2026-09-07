@@ -9,17 +9,32 @@ st.title("📦 Inventory Demand Signals")
 st.caption("Based on units sold in the last 30 days — not live stock levels.")
 
 with st.spinner("Analyzing recent sales..."):
-    response = requests.get(f"{API_URL}/inventory-signals")
+
+    headers = {
+        "Authorization": f"Bearer {st.session_state.access_token}"
+    }
+
+    response = requests.get(
+        f"{API_URL}/inventory-signals",
+        headers=headers
+    )
 
 if response.status_code == 200:
     signals = response.json()
 
     if signals:
         st.subheader("Fastest-Moving Products (Last 30 Days)")
+
         for s in signals:
-            st.write(f"**{s['product_name']}** — {s['units_sold_recently']} units sold recently")
+            st.write(
+                f"**{s['product_name']}** — "
+                f"{s['units_sold_recently']} units sold recently"
+            )
+
         st.info("Consider keeping extra stock of these items.")
+
     else:
         st.info("No recent sales data available yet.")
+
 else:
     st.error("Could not load inventory data.")

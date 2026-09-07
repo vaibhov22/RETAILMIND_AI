@@ -11,7 +11,14 @@ if st.button("Refresh Dashboard"):
     st.rerun()
 
 with st.spinner("Loading business data..."):
-    response = requests.get(f"{API_URL}/dashboard")
+    headers = {
+    "Authorization": f"Bearer {st.session_state.access_token}"
+    }
+
+    response = requests.get(
+        f"{API_URL}/dashboard",
+        headers=headers
+    )
 
 if response.status_code == 200:
     data = response.json()

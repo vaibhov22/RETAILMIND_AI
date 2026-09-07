@@ -25,8 +25,13 @@ if question:
 
     with st.chat_message("assistant"):
         with st.spinner("Thinking..."):
+            headers = {
+    "Authorization": f"Bearer {st.session_state.access_token}"
+            }
+
             response = requests.post(
                 f"{API_URL}/copilot",
+                headers=headers,
                 json={
                     "question": question,
                     "history": st.session_state.chat_history
