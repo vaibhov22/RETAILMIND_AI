@@ -38,7 +38,7 @@ app = FastAPI()
 # ============================================================
 
 @app.post("/upload-invoice")
-async def uplaod_invoice(
+async def upload_invoice(
     file: UploadFile = File(...),
     user_id: str = Depends(get_current_user_id)
 ):
@@ -74,7 +74,9 @@ async def uplaod_invoice(
         json_data = response.choices[0].message.content
 
         try:
-            invoiceExtraction = InvoiceExtraction.model_validate_json(json_data)
+            invoiceExtraction = InvoiceExtraction.model_validate_json(
+                json_data
+            )
 
             parsed_date = None
 
@@ -124,9 +126,9 @@ async def uplaod_invoice(
                 business.business_id
             )
 
+            # Check whether this invoice already has items
             existing_items = db.query(InvoiceItem).filter(
-                InvoiceItem.invoice_id == invoice.invoice_id,
-                InvoiceItem.business_id == business.business_id
+                InvoiceItem.invoice_id == invoice.invoice_id
             ).first()
 
             if existing_items:
@@ -185,10 +187,60 @@ def update_profile(
             business.business_id
         )
 
+        if customer is None:
+            return {"error": "Customer not found"}
+
         return {
             "message": "Customer profile updated",
             "customer_id": customer.customer_id
         }
+
+    finally:
+        db.close()
+
+
+# ============================================================
+# CUSTOMER SEARCH
+# ============================================================
+
+@app.get("/customer-search")
+def customer_search(
+    phone: str = None,
+    name: str = None,
+    user_id: str = Depends(get_current_user_id)
+):
+    db = SessionLocal()
+
+    try:
+        business = get_or_create_business(db, user_id)
+
+        query = db.query(Customer).filter(
+            Customer.business_id == business.business_id
+        )
+
+        if phone:
+            query = query.filter(
+                Customer.phone == phone
+            )
+
+        elif name:
+            query = query.filter(
+                Customer.name.ilike(f"%{name}%")
+            )
+
+        else:
+            return {"error": "Enter customer name or phone number"}
+
+        customers = query.all()
+
+        return [
+            {
+                "customer_id": customer.customer_id,
+                "name": customer.name,
+                "phone": customer.phone
+            }
+            for customer in customers
+        ]
 
     finally:
         db.close()
@@ -286,7 +338,9 @@ def next_best_action(
         if prediction["status"] == "not_enough_data":
             return prediction
 
-        action = get_next_best_action(prediction["status"])
+        action = get_next_best_action(
+            prediction["status"]
+        )
 
         result = {
             "status": prediction["status"],
@@ -371,7 +425,7 @@ def dashboard(
 
 
 # ============================================================
-# COPILOT
+# COPILOT GET
 # ============================================================
 
 @app.get("/copilot")
@@ -384,9 +438,6 @@ def test_copilot(
     try:
         business = get_or_create_business(db, user_id)
 
-        # IMPORTANT:
-        # The copilot function itself must also filter its
-        # database operations by business.business_id.
         return copilot(
             question,
             db,
@@ -486,9 +537,6 @@ def copilot_route(
     try:
         business = get_or_create_business(db, user_id)
 
-        # IMPORTANT:
-        # copilot.py must eventually receive business_id
-        # so its internal database queries are isolated.
         return copilot(
             data.question,
             db,

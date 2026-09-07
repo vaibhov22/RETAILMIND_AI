@@ -9,8 +9,6 @@ st.set_page_config(
 
 require_auth()
 
-st.set_page_config(page_title="RetailMind AI", page_icon="🛒", layout="wide")
-
 st.title("🛒 RetailMind AI")
 st.subheader("From Data → Decisions → Actions")
 
@@ -27,4 +25,7 @@ RetailMind AI turns invoices into business intelligence — automatically.
 
 st.info("Backend API: https://retailmind-ai-7h7v.onrender.com")
 
-st.sidebar.button("🚪 Logout", on_click=logout)
+st.sidebar.button(
+    "🚪 Logout",
+    on_click=logout
+)

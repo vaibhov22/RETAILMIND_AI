@@ -7,25 +7,98 @@ API_URL = "https://retailmind-ai-7h7v.onrender.com"
 
 st.title("👤 Customer Profile")
 
-customer_id = st.number_input(
-    "Enter Customer ID",
-    min_value=1,
-    step=1
+search_type = st.radio(
+    "Search customer by",
+    ["Phone Number", "Name"],
+    horizontal=True
 )
 
-if st.button("Load Profile"):
-    with st.spinner("Fetching customer data..."):
+if search_type == "Phone Number":
+    search_value = st.text_input(
+        "Enter Customer Phone Number"
+    )
+else:
+    search_value = st.text_input(
+        "Enter Customer Name"
+    )
 
+if st.button("Search Customer"):
+
+    if not search_value:
+        st.warning("Please enter a name or phone number.")
+
+    else:
         headers = {
             "Authorization": f"Bearer {st.session_state.access_token}"
         }
 
+        params = (
+            {"phone": search_value}
+            if search_type == "Phone Number"
+            else {"name": search_value}
+        )
+
+        with st.spinner("Searching customer..."):
+            response = requests.get(
+                f"{API_URL}/customer-search",
+                params=params,
+                headers=headers
+            )
+
+        if response.status_code == 200:
+
+            results = response.json()
+
+            if isinstance(results, dict) and "error" in results:
+                st.error(results["error"])
+
+            elif not results:
+                st.warning("Customer not found.")
+
+            elif len(results) == 1:
+                st.session_state["selected_customer_id"] = (
+                    results[0]["customer_id"]
+                )
+
+            else:
+                st.subheader("Customers Found")
+
+                options = {
+                    f"{c['name']} ({c['phone']})": c["customer_id"]
+                    for c in results
+                }
+
+                selected = st.selectbox(
+                    "Select Customer",
+                    list(options.keys())
+                )
+
+                st.session_state["selected_customer_id"] = (
+                    options[selected]
+                )
+
+        else:
+            st.error(
+                f"Search failed: {response.status_code}"
+            )
+
+
+if "selected_customer_id" in st.session_state:
+
+    customer_id = st.session_state["selected_customer_id"]
+
+    headers = {
+        "Authorization": f"Bearer {st.session_state.access_token}"
+    }
+
+    with st.spinner("Fetching customer data..."):
         response = requests.get(
             f"{API_URL}/customer/{customer_id}",
             headers=headers
         )
 
     if response.status_code == 200:
+
         data = response.json()
 
         if "error" in data:
@@ -34,12 +107,16 @@ if st.button("Load Profile"):
         else:
             customer = data["customer"]
 
-            st.subheader(f"{customer['name'] or 'Unknown'}")
+            st.subheader(
+                f"{customer['name'] or 'Unknown'}"
+            )
 
             col1, col2 = st.columns(2)
 
             with col1:
-                st.write(f"**Phone:** {customer['phone']}")
+                st.write(
+                    f"**Phone:** {customer['phone']}"
+                )
                 st.write(
                     f"**Customer Type:** "
                     f"{customer['customer_type'] or 'Not set'}"

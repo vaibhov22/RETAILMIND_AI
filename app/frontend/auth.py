@@ -5,7 +5,7 @@ import httpx
 SUPABASE_URL = st.secrets["supabase"]["url"]
 SUPABASE_KEY = st.secrets["supabase"]["key"]
 
-st.write("DEBUG URL:", repr(SUPABASE_URL))
+
 def supabase_headers():
     return {
         "apikey": SUPABASE_KEY,
@@ -47,7 +47,6 @@ def verify_otp(email, token):
 
 
 def login_page():
-
     st.title("🛒 RetailMind AI")
     st.subheader("Login to continue")
 
@@ -69,8 +68,13 @@ def login_page():
                 st.session_state.otp_email = email
                 st.success("OTP sent! Check your email.")
             else:
+                try:
+                    message = response.json().get("msg", response.text)
+                except Exception:
+                    message = response.text
+
                 st.error(
-                    f"Failed to send OTP: {response.json().get('msg', response.text)}"
+                    f"Failed to send OTP: {message}"
                 )
 
         except Exception as e:
@@ -106,9 +110,16 @@ def login_page():
                     st.rerun()
 
                 else:
+                    try:
+                        message = response.json().get(
+                            "msg",
+                            response.text
+                        )
+                    except Exception:
+                        message = response.text
+
                     st.error(
-                        f"Invalid or expired OTP: "
-                        f"{response.json().get('msg', response.text)}"
+                        f"Invalid or expired OTP: {message}"
                     )
 
             except Exception as e:

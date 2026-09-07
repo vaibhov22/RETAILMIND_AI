@@ -81,17 +81,13 @@ def create_invoice(
 
     if invoice_id is None:
 
-        count = db.query(Invoice).filter(
-            Invoice.business_id == business_id
-        ).count()
-
+        count = db.query(Invoice).count()
         invoice_id = f"INV-AUTO-{count + 1:04d}"
 
     else:
 
         existing = db.query(Invoice).filter(
-            Invoice.invoice_id == invoice_id,
-            Invoice.business_id == business_id
+            Invoice.invoice_id == invoice_id
         ).first()
 
         if existing:
