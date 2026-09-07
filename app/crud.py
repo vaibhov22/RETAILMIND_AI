@@ -118,14 +118,16 @@ def create_invoice(
 # INVOICE ITEMS
 # ============================================================
 
-def create_invoice_items(
-    db,
-    invoice_id,
-    items_with_product_ids,
-    business_id
-):
-
+def create_invoice_items(db, invoice_id, items_with_product_ids, business_id):
     for item in items_with_product_ids:
+
+        existing_item = db.query(InvoiceItem).filter(
+            InvoiceItem.invoice_id == invoice_id,
+            InvoiceItem.product_id == item["product_id"]
+        ).first()
+
+        if existing_item:
+            continue
 
         invoiceItem = InvoiceItem(
             invoice_id=invoice_id,
@@ -139,7 +141,6 @@ def create_invoice_items(
         db.add(invoiceItem)
 
     db.commit()
-
     return True
 
 
