@@ -1,4 +1,5 @@
 from fastapi import FastAPI , File, UploadFile
+from datetime import datetime
 from schemas import InvoiceExtraction , CustomerProfileUpdate,CopilotRequest
 from groq import Groq
 from config import groq_vision_model, groq_api
@@ -59,6 +60,12 @@ async def uplaod_invoice(file:UploadFile= File(...),user_id: str = Depends(get_c
     json_data = response.choices[0].message.content
     try:
         invoiceExtraction = InvoiceExtraction.model_validate_json(json_data)
+        parsed_date = None
+        if invoiceExtraction.date:
+            try:
+                parsed_date = datetime.strptime(invoiceExtraction.date, "%d-%m-%Y").date()
+            except ValueError:
+                parsed_date = None
         customer = get_or_create_customer(
             db,
             invoiceExtraction.customer_name,
@@ -85,7 +92,7 @@ async def uplaod_invoice(file:UploadFile= File(...),user_id: str = Depends(get_c
             db,
             customer.customer_id,
             invoiceExtraction.invoice_id,
-            invoiceExtraction.date,
+            parsed_date,
             invoiceExtraction.total_amount,
             invoiceExtraction.paid_amount,
             invoiceExtraction.credit_amount,
