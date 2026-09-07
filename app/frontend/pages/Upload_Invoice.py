@@ -15,8 +15,9 @@ if uploaded_file is not None:
 
     if st.button("Process Invoice"):
         with st.spinner("Reading invoice with AI..."):
+            headers = {"Authorization": f"Bearer {st.session_state.access_token}"}
             files = {"file": (uploaded_file.name, uploaded_file.getvalue(), uploaded_file.type)}
-            response = requests.post(f"{API_URL}/upload-invoice", files=files)
+            response = requests.post(f"{API_URL}/upload-invoice", files=files, headers=headers)
 
         if response.status_code == 200:
             result = response.json()
