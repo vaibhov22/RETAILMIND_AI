@@ -13,3 +13,10 @@ if groq_api is None:
 
 groq_vision_model = os.getenv("GROQ_VISION_MODEL")
 
+supabase_url = os.getenv("SUPABASE_URL")
+if supabase_url is None:
+    raise ValueError("SUPABASE_URL is not found in .env")
+
+supabase_key = os.getenv("SUPABASE_KEY")
+if supabase_key is None:
+    raise ValueError("SUPABASE_KEY is not found in .env")

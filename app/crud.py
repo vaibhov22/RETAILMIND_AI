@@ -1,18 +1,22 @@
 
-from models import Customer,Product,InvoiceItem,Invoice
+from models import Customer,Product,InvoiceItem,Invoice,Business
 from database import SessionLocal
 from sqlalchemy import func
 from datetime import date
-def get_or_create_customer(db, name, phone):
+def get_or_create_customer(db, name, phone,business_id):
 
-    customer = db.query(Customer).filter(Customer.phone == phone).first()
+    customer = db.query(Customer).filter(
+        Customer.phone == phone,
+        Customer.business_id == business_id
+    ).first()
 
     if customer:
         return customer
 
     customer = Customer(
         name=name,
-        phone=phone
+        phone=phone,
+        business_id=business_id
     )
 
     db.add(customer)
@@ -20,29 +24,35 @@ def get_or_create_customer(db, name, phone):
     db.refresh(customer)
 
     return customer
-def get_or_create_product(db,product_name):
-    product = db.query(Product).filter(Product.product_name == product_name).first()
+def get_or_create_product(db, product_name, business_id):
+    product = db.query(Product).filter(
+        Product.product_name == product_name,
+        Product.business_id == business_id
+    ).first()
 
     if product:
         return product
-    count = db.query(Product).count()
+
+    count = db.query(Product).filter(Product.business_id == business_id).count()
     new_id = f"P{count+1:04d}"
 
-    product = Product(product_id=new_id,product_name = product_name)
+    product = Product(product_id=new_id, product_name=product_name, business_id=business_id)
     db.add(product)
     db.commit()
     db.refresh(product)
     return product
 
-def create_invoice(db,customer_id,invoice_id,date,total_amount,paid_amount,credit_amount):
+def create_invoice(db, customer_id, invoice_id, date, total_amount, paid_amount, credit_amount, business_id):
     if invoice_id is None:
-        count = db.query(Invoice).count()
+        count = db.query(Invoice).filter(Invoice.business_id == business_id).count()
         invoice_id = f"INV-AUTO-{count+1:04d}"
     else:
-
-        existing = db.query(Invoice).filter(Invoice.invoice_id == invoice_id).first()
+        existing = db.query(Invoice).filter(
+            Invoice.invoice_id == invoice_id,
+            Invoice.business_id == business_id
+        ).first()
         if existing:
-            return existing 
+            return existing
 
     invoice = Invoice(
         invoice_id=invoice_id,
@@ -50,20 +60,22 @@ def create_invoice(db,customer_id,invoice_id,date,total_amount,paid_amount,credi
         invoice_date=date,
         total_amount=total_amount,
         paid_amount=paid_amount,
-        credit_amount=credit_amount
+        credit_amount=credit_amount,
+        business_id=business_id
     )
     db.add(invoice)
     db.commit()
     db.refresh(invoice)
     return invoice
-def create_invoice_items(db, invoice_id, items_with_product_ids):
+def create_invoice_items(db, invoice_id, items_with_product_ids, business_id):
     for item in items_with_product_ids:
         invoiceItem = InvoiceItem(
             invoice_id=invoice_id,
             product_id=item["product_id"],
             quantity=item["quantity"],
             unit_price=item["unit_price"],
-            total_price=item["total_price"]
+            total_price=item["total_price"],
+            business_id=business_id
         )
         db.add(invoiceItem)
 
@@ -338,3 +350,21 @@ def get_inventory_signals(db, days=30):
         {"product_name": p.product_name, "units_sold_recently": p.units_sold}
         for p in recent_sales
     ]
+
+def get_or_create_business(db, supabase_user_id, business_name=None):
+    business = db.query(Business).filter(
+        Business.supabase_user_id == supabase_user_id
+    ).first()
+
+    if business:
+        return business
+
+    business = Business(
+        supabase_user_id=supabase_user_id,
+        business_name=business_name
+    )
+    db.add(business)
+    db.commit()
+    db.refresh(business)
+
+    return business

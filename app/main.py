@@ -6,6 +6,8 @@ from models import Customer, Invoice, InvoiceItem ,Product
 from database import SessionLocal
 from crud import predict_next_purchase
 from copiloit import copilot
+from fastapi import Depends
+from auth_backend import get_current_user_id
 from ai_helper import generate_prediction_message,generate_whatsapp_message
 from crud import (
     get_or_create_customer,
@@ -21,13 +23,16 @@ from crud import (
     get_weak_products,
     get_credit_overview,
     get_product_bundles,
-    get_inventory_signals
+    get_inventory_signals,
+    get_or_create_business
 )
 import base64
 client = Groq(api_key=groq_api)
 app = FastAPI()
 @app.post("/upload-invoice")
-async def uplaod_invoice(file:UploadFile= File(...)):
+async def uplaod_invoice(file:UploadFile= File(...),user_id: str = Depends(get_current_user_id)):
+    db = SessionLocal()
+    business = get_or_create_business(db, user_id)
     image_bytes  =  await file.read()
     base64_image = base64.b64encode(image_bytes).decode("utf-8")
     response = client.chat.completions.create(
@@ -54,12 +59,11 @@ async def uplaod_invoice(file:UploadFile= File(...)):
     json_data = response.choices[0].message.content
     try:
         invoiceExtraction = InvoiceExtraction.model_validate_json(json_data)
-        db = SessionLocal()
-
         customer = get_or_create_customer(
             db,
             invoiceExtraction.customer_name,
-            invoiceExtraction.customer_phone
+            invoiceExtraction.customer_phone,
+            business.business_id
         )
         needs_profile = customer.customer_type is None
         items = []
@@ -67,7 +71,8 @@ async def uplaod_invoice(file:UploadFile= File(...)):
 
             product = get_or_create_product(
                 db,
-                item.product_name
+                item.product_name,
+                business.business_id
             )
 
             items.append({
@@ -83,10 +88,14 @@ async def uplaod_invoice(file:UploadFile= File(...)):
             invoiceExtraction.date,
             invoiceExtraction.total_amount,
             invoiceExtraction.paid_amount,
-            invoiceExtraction.credit_amount
+            invoiceExtraction.credit_amount,
+            business.business_id
         )
         # Check if this invoice_id already had items saved
-        existing_items = db.query(InvoiceItem).filter(InvoiceItem.invoice_id == invoice.invoice_id).first()
+        existing_items = db.query(InvoiceItem).filter(
+        InvoiceItem.invoice_id == invoice.invoice_id,
+        InvoiceItem.business_id == business.business_id
+        ).first()
 
         if existing_items:
             return {
@@ -100,7 +109,8 @@ async def uplaod_invoice(file:UploadFile= File(...)):
         create_invoice_items(
             db,
             invoice.invoice_id,
-            items
+            items,
+            business.business_id
         )
         return {
             "message": "Invoice saved successfully",
