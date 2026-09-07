@@ -32,7 +32,7 @@ class Invoice(Base):
 
 class Product(Base):
     __tablename__ = "products"
-    business_id = Column(Integer, ForeignKey("businesses.business_id"))
+    business_id = Column(Integer, ForeignKey("businesses.business_id"), primary_key=True)
     product_id = Column(String(10),primary_key=True)
     product_name = Column(String(150))
     category = Column(String(20))
