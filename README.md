@@ -79,9 +79,21 @@ flowchart TD
 
 ### Multi-Tenant Isolation
 
-* Every incoming request validates a **Supabase Bearer Token**.
-* The backend resolves `supabase_user_id` $\rightarrow$ `business_id`.
+* Every incoming request validates a **Supabase Bearer Token** server-side against Supabase's `/auth/v1/user` endpoint — tokens are never trusted at face value.
+* The backend resolves `supabase_user_id` → `business_id` internally; this mapping is never accepted from the client.
 * The frontend cannot specify or override the target business tenant, strictly mitigating tenant crossover vulnerabilities.
+* Database-level composite primary keys (`invoice_id + business_id`, `product_id + business_id`) prevent ID collisions between tenants at the schema level, not just the application level.
+
+---
+
+## 🔒 Security & Testing
+
+Multi-tenant isolation was manually verified end-to-end, not just designed on paper:
+
+* Two independent Supabase accounts were created and used to log into the live deployment.
+* Each account uploaded separate invoices and generated separate customer/product records.
+* Verified directly in the production database that each account's queries (dashboard, customer profiles, copilot, credit overview) return **only** their own business's data — no cross-tenant leakage.
+* The AI copilot's tool-calling layer explicitly strips any `business_id` argument the LLM attempts to supply and replaces it with the authenticated user's real, server-derived business_id before every database call.
 
 ---
 
@@ -93,7 +105,8 @@ flowchart TD
 * **Next Best Action Generator:** Turns stale accounts into targeted customer retention by producing personalized WhatsApp drafts featuring their favorite products.
 * **Store Health Indicators:** Real-time visibility into hero items, low-velocity products, transaction volumes, and 30-day demand signals.
 * **Product Co-Occurrence Detection:** Native basket analysis identifying items frequently ordered together for bundle creation.
-* **Natural Language Copilot:** An autonomous, read-only analytics agent equipped with tool-calling capabilities to query the store's PostgreSQL metrics securely.
+* **Natural Language Copilot:** An autonomous, read-only analytics agent equipped with tool-calling capabilities and conversation memory to query the store's PostgreSQL metrics securely.
+* **Customer Search:** Retailers look customers up by name or phone — no need to remember internal database IDs.
 
 ---
 
@@ -113,8 +126,8 @@ flowchart TD
 +-------v---------+                             +-------v---------+
 |    Customers    |                             |    Products     |
 +-----------------+                             +-----------------+
-| customer_id(PK) |                             | product_id (PK) |
-| business_id(FK) |                             | business_id(FK) |
+| customer_id(PK) |                             | product_id (PK)*|
+| business_id(FK) |                             | business_id(PK)*|
 | name, phone     |                             | product_name    |
 | behavioral_tags |                             +--------+--------+
 +-------+---------+                                      |
@@ -123,21 +136,25 @@ flowchart TD
 +-------v---------+                             +--------v--------+
 |    Invoices     | 1:N                         |  Invoice Items  |
 +-----------------+---------------------------->+-----------------+
-| invoice_id (PK) |                             | item_id (PK)    |
-| customer_id(FK) |                             | invoice_id (FK) |
-| business_id(FK) |                             | product_id (FK) |
+| invoice_id (PK)*|                             | invoice_id (PK) |
+| business_id(PK)*|                             | product_id (PK) |
+| customer_id(FK) |                             | business_id(FK) |
 | totals & credit |                             | qty, unit_price |
 +-----------------+                             +-----------------+
 
+* Composite primary key (id + business_id) — allows two
+  different businesses to safely use the same invoice/product IDs.
 ```
 
 ---
 
 ## 📡 Core API Specification
 
+All endpoints below (except health checks) require a valid `Authorization: Bearer <supabase_access_token>` header.
+
 | Endpoint | Method | Role | Payload / Returns |
 | --- | --- | --- | --- |
-| `/upload-invoice` | `POST` | Processes visual receipt | `multipart/form-data` $\rightarrow$ Extracted JSON |
+| `/upload-invoice` | `POST` | Processes visual receipt | `multipart/form-data` → Extracted JSON |
 | `/update-customer-profile` | `POST` | Enriches customer record | Behavioral questionnaire fields |
 | `/customer-search` | `GET` | Directory lookup | Query param: `name` or `phone` |
 | `/customer/{id}` | `GET` | Deep customer dossier | Lifetime metrics, favorite items, balance |
@@ -158,7 +175,7 @@ Frontend            Streamlit Community Cloud
 API Framework       FastAPI + Pydantic v2
 Database            PostgreSQL (Hosted via Neon)
 ORM                 SQLAlchemy
-Auth Layer          Supabase Auth (Passwordless Email OTP)
+Auth Layer          Supabase Auth (Passwordless Email OTP, via direct HTTPX calls)
 AI Inference        Groq LPU Acceleration
 Vision Model        Qwen Vision
 Language Model      GPT-OSS 120B (Tool Calling & Action Copy)
@@ -202,8 +219,16 @@ DATABASE_URL=postgresql://username:password@localhost:5432/your_database_name
 GROQ_API_KEY=your_groq_api_key
 GROQ_VISION_MODEL=qwen/qwen3.8-27b
 SUPABASE_URL=your_supabase_project_url
-SUPABASE_KEY=your_supabase_key
+SUPABASE_KEY=your_supabase_publishable_key
 
+```
+
+For the Streamlit frontend, also create `.streamlit/secrets.toml`:
+
+```toml
+[supabase]
+url = "your_supabase_project_url"
+key = "your_supabase_publishable_key"
 ```
 
 ### 4. Run Application Services
@@ -214,11 +239,11 @@ cd app
 uvicorn main:app --reload --port 8000
 
 # Terminal 2: Frontend Dashboard (from project root)
-streamlit run app/frontend/Home.py
+streamlit run frontend/Home.py
 
 ```
 
-* **Swagger Docs:** `[http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)`
+* **Swagger Docs:** `http://127.0.0.1:8000/docs`
 * **Streamlit UI:** `http://localhost:8501`
 
 ---
@@ -230,7 +255,4 @@ streamlit run app/frontend/Home.py
 * [ ] Predictive bulk replenishment alerts for store managers
 * [ ] Batch legacy invoice scanning for historical record migration
 * [ ] Offline-first mobile interface (PWA) tailored for counter registers
-
----
-
-Would you like to add a demo script, sample `.env.example` snippet, or custom hackathon judging badges to this README?
+* [ ] Business-level sanity validation layer (reject/flag implausible extracted values before they reach the database)
