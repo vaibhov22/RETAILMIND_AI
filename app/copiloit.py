@@ -80,7 +80,18 @@ def copilot(question, db, business_id, history=None):
     ]
 
     if history:
-        messages.extend(history)
+        for item in history:
+            if not isinstance(item, dict):
+                continue
+
+            role = item.get("role")
+            content = item.get("content")
+
+            if role in {"user", "assistant"} and content:
+                messages.append({
+                    "role": role,
+                    "content": str(content)
+                })
 
     messages.append({
         "role": "user",
