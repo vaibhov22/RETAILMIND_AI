@@ -1,16 +1,9 @@
 import streamlit as st
 import httpx
-import extra_streamlit_components as stx
 
 
 SUPABASE_URL = st.secrets["supabase"]["url"]
 SUPABASE_KEY = st.secrets["supabase"]["key"]
-
-
-def get_cookie_manager():
-    if "cookie_manager" not in st.session_state:
-        st.session_state.cookie_manager = stx.CookieManager(key="retailmind_cookies")
-    return st.session_state.cookie_manager
 
 
 def supabase_headers():
@@ -80,13 +73,8 @@ def login_page():
                     st.session_state.user = data.get("user")
                     st.session_state.access_token = data.get("access_token")
 
-                    # Save token in a real browser cookie so it survives refresh
-                    cookie_manager = get_cookie_manager()
-                    cookie_manager.set(
-                        "retailmind_access_token",
-                        data.get("access_token"),
-                        key="set_token_cookie"
-                    )
+                    # Persist token in the URL so it survives a page refresh
+                    st.query_params["token"] = data.get("access_token")
 
                     st.session_state.pop("otp_email", None)
                     st.rerun()
@@ -107,25 +95,19 @@ def require_auth():
     if "access_token" in st.session_state:
         return
 
-    cookie_manager = get_cookie_manager()
-    cookies = cookie_manager.get_all()
+    # Not logged in yet — check if a token is sitting in the URL from before refresh
+    token_from_url = st.query_params.get("token")
 
-    # Cookie manager hasn't synced with the browser yet — wait for it
-    if cookies is None:
-        st.stop()
-
-    token_from_cookie = cookies.get("retailmind_access_token")
-
-    if token_from_cookie:
-        st.session_state.access_token = token_from_cookie
+    if token_from_url:
+        st.session_state.access_token = token_from_url
         return
 
-    # Genuinely no cookie and no session — show login
+    # No session, no URL token — show login
     login_page()
     st.stop()
 
+
 def logout():
-    cookie_manager = get_cookie_manager()
-    cookie_manager.delete("retailmind_access_token", key="delete_token_cookie")
+    st.query_params.clear()
     st.session_state.clear()
     st.rerun()
