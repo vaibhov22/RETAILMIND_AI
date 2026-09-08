@@ -8,7 +8,8 @@ from crud import (
     get_hero_products,
     get_weak_products,
     get_customer_profile,
-    predict_next_purchase
+    predict_next_purchase,
+    list_customers
 )
 
 client = Groq(api_key=groq_api)
@@ -19,7 +20,8 @@ available_functions = {
     "get_hero_products": get_hero_products,
     "get_weak_products": get_weak_products,
     "get_customer_profile": get_customer_profile,
-    "predict_next_purchase": predict_next_purchase
+    "predict_next_purchase": predict_next_purchase,
+    "list_customers": list_customers
 }
 
 
