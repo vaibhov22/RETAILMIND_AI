@@ -87,7 +87,10 @@ def create_invoice(
     else:
 
         existing = db.query(Invoice).filter(
-            Invoice.invoice_id == invoice_id
+            Invoice.invoice_id == invoice_id,
+            Invoice.business_id == business_id
+
+
         ).first()
 
         if existing:
@@ -119,7 +122,8 @@ def create_invoice_items(db, invoice_id, items_with_product_ids, business_id):
 
         existing_item = db.query(InvoiceItem).filter(
             InvoiceItem.invoice_id == invoice_id,
-            InvoiceItem.product_id == item["product_id"]
+            InvoiceItem.product_id == item["product_id"],
+            InvoiceItem.business_id == business_id
         ).first()
 
         if existing_item:

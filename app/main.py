@@ -127,17 +127,17 @@ async def upload_invoice(
             )
 
             # Check whether this invoice already has items
-            existing_items = db.query(InvoiceItem).filter(
-                InvoiceItem.invoice_id == invoice.invoice_id
-            ).first()
+            # existing_items = db.query(InvoiceItem).filter(
+            #     InvoiceItem.invoice_id == invoice.invoice_id
+            # ).first()
 
-            if existing_items:
-                return {
-                    "message": "This invoice was already processed earlier",
-                    "invoice_id": invoice.invoice_id,
-                    "customer_id": customer.customer_id,
-                    "needs_profile_questions": needs_profile
-                }
+            # if existing_items:
+            #     return {
+            #         "message": "This invoice was already processed earlier",
+            #         "invoice_id": invoice.invoice_id,
+            #         "customer_id": customer.customer_id,
+            #         "needs_profile_questions": needs_profile
+            #     }
 
             create_invoice_items(
                 db,
