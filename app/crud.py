@@ -184,7 +184,15 @@ def update_customer_profile(
 # ============================================================
 # CUSTOMER PROFILE
 # ============================================================
+def list_customers(db, business_id):
+    customers = db.query(Customer).filter(
+        Customer.business_id == business_id
+    ).all()
 
+    return [
+        {"customer_id": c.customer_id, "name": c.name, "phone": c.phone}
+        for c in customers
+    ]
 def get_customer_profile(db, customer_id, business_id):
 
     customer = db.query(Customer).filter(

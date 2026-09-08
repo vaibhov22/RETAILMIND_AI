@@ -79,4 +79,16 @@ tools = [
             }
         }
     }
+    {
+    "type": "function",
+    "function": {
+        "name": "list_customers",
+        "description": "Get a list of all customers belonging to this business, including their customer_id, name, and phone number. Use this when the retailer asks about customer names, wants a customer list, or needs to find a customer_id before looking up their full profile.",
+        "parameters": {
+            "type": "object",
+            "properties": {},
+            "required": []
+        }
+    }
+}
 ]
