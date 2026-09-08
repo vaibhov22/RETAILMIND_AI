@@ -78,7 +78,7 @@ tools = [
                 "required": ["customer_id"]
             }
         }
-    }
+    },
     {
     "type": "function",
     "function": {
@@ -90,5 +90,5 @@ tools = [
             "required": []
         }
     }
-}
+    }  
 ]
