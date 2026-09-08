@@ -107,18 +107,22 @@ def require_auth():
     if "access_token" in st.session_state:
         return
 
-    # Not logged in yet — check if a cookie from a previous session exists
     cookie_manager = get_cookie_manager()
-    token_from_cookie = cookie_manager.get("retailmind_access_token")
+    cookies = cookie_manager.get_all()
+
+    # Cookie manager hasn't synced with the browser yet — wait for it
+    if cookies is None:
+        st.stop()
+
+    token_from_cookie = cookies.get("retailmind_access_token")
 
     if token_from_cookie:
         st.session_state.access_token = token_from_cookie
         return
 
-    # No session, no cookie — show login screen
+    # Genuinely no cookie and no session — show login
     login_page()
     st.stop()
-
 
 def logout():
     cookie_manager = get_cookie_manager()
