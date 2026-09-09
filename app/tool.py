@@ -83,7 +83,7 @@ tools = [
     "type": "function",
     "function": {
         "name": "list_customers",
-        "description": "Get a list of all customers belonging to this business, including their customer_id, name, and phone number. Use this when the retailer asks about customer names, wants a customer list, or needs to find a customer_id before looking up their full profile.",
+        "description": "Get a list of all customers belonging to this business, including their customer_id, name, and phone number. ONLY use this when the customer_id is unknown or when the retailer explicitly asks for a list of all customers. Do NOT use this if a specific customer_id or customer name with a known ID is already mentioned in the question — call get_customer_profile directly instead.",
         "parameters": {
             "type": "object",
             "properties": {},

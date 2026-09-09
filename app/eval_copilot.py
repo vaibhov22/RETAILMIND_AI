@@ -301,7 +301,7 @@ def get_called_tools(question):
             model="openai/gpt-oss-120b",
             messages=messages,
             tools=tools,
-            tool_choice="required"
+            tool_choice="auto"
         )
 
         message = response.choices[0].message
