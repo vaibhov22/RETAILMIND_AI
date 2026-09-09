@@ -14,6 +14,7 @@ from crud import (
 
 client = Groq(api_key=groq_api)
 
+
 available_functions = {
     "get_business_dashboard": get_business_dashboard,
     "get_hero_products": get_hero_products,
@@ -23,14 +24,27 @@ available_functions = {
     "list_customers": list_customers
 }
 
-allowed_arguments = {
-    "get_business_dashboard": set(),
-    "get_hero_products": set(),
-    "get_weak_products": set(),
-    "list_customers": set(),
-    "get_customer_profile": {"customer_id"},
-    "predict_next_purchase": {"customer_id"}
-}
+
+def call_groq_with_retry(messages, tool_choice="auto", max_retries=2):
+    """
+    Calls Groq's chat completion, retrying once if the model
+    returns malformed/unparseable tool-call output (a known
+    occasional issue with reasoning-style models).
+    Returns the message on success, or None if all retries fail.
+    """
+    for attempt in range(max_retries):
+        try:
+            response = client.chat.completions.create(
+                model="openai/gpt-oss-120b",
+                messages=messages,
+                tools=tools,
+                tool_choice=tool_choice
+            )
+            return response.choices[0].message
+        except Exception:
+            if attempt == max_retries - 1:
+                return None
+            continue
 
 
 def copilot(question, db, business_id, history=None):
@@ -39,59 +53,26 @@ def copilot(question, db, business_id, history=None):
         {
             "role": "system",
             "content": (
-                "STRICT TOOL SELECTION:\n"
-                "Before calling any tool, identify the minimum set of tools "
-                "required to answer the question.\n\n"
-
-                "If the question is about overall business metrics, revenue, "
-                "orders, customer count, or business overview, call ONLY "
-                "get_business_dashboard.\n"
-
-                "If the question is about best-selling, strongest, or top "
-                "products, call ONLY get_hero_products.\n"
-
-                "If the question is about weak, poor, worst, or low-demand "
-                "products, call ONLY get_weak_products.\n"
-
-                "If the question asks to list or search customers, call ONLY "
-                "list_customers.\n"
-
-                "If the question is about an identified customer's existing "
-                "information, including purchases, spending, favorite products, "
-                "orders, last purchase, credit, buying behavior, or profile, "
-                "call ONLY get_customer_profile.\n"
-
-                "If the question is about when an identified customer will buy "
-                "again, whether they are likely to purchase, whether they are "
-                "overdue, or when to contact/follow up with them, call ONLY "
-                "predict_next_purchase.\n\n"
-
-                "NEVER call list_customers together with get_customer_profile.\n"
-                "NEVER call get_customer_profile together with "
-                "predict_next_purchase unless the user explicitly asks for "
-                "both existing information and future prediction.\n"
-                "NEVER call get_hero_products together with get_weak_products "
-                "unless the user explicitly asks for both.\n\n"
-
-                "Use earlier conversation context when the user refers to "
-                "something previously discussed."
+                "You are a retail business assistant. "
+                "If a question requires more than one piece of information "
+                "to answer fully, call ALL the necessary tools before answering "
+                "— do not answer with only partial information. "
+                "Use the earlier conversation for context when the question "
+                "refers back to something previously discussed."
             )
         }
     ]
 
     if history:
-        for item in history:
-            if not isinstance(item, dict):
-                continue
-
-            role = item.get("role")
-            content = item.get("content")
-
-            if role in {"user", "assistant"} and content:
-                messages.append({
-                    "role": role,
-                    "content": str(content)
-                })
+        for entry in history:
+            messages.append({
+                "role": "user",
+                "content": entry["question"]
+            })
+            messages.append({
+                "role": "assistant",
+                "content": str(entry["answer"])
+            })
 
     messages.append({
         "role": "user",
@@ -100,14 +81,10 @@ def copilot(question, db, business_id, history=None):
 
     while True:
 
-        response = client.chat.completions.create(
-            model="openai/gpt-oss-120b",
-            messages=messages,
-            tools=tools,
-            tool_choice="auto"
-        )
+        message = call_groq_with_retry(messages, tool_choice="auto")
 
-        message = response.choices[0].message
+        if message is None:
+            return "Sorry, I had trouble processing that question. Could you try rephrasing it?"
 
         messages.append(message)
 
@@ -117,60 +94,18 @@ def copilot(question, db, business_id, history=None):
         for tool_call in message.tool_calls:
 
             function_name = tool_call.function.name
-
-            if function_name not in available_functions:
-                continue
-
-            try:
-                function_args = json.loads(
-                    tool_call.function.arguments or "{}"
-                )
-            except (json.JSONDecodeError, TypeError):
-                function_args = {}
-
-            if not isinstance(function_args, dict):
-                function_args = {}
-
-            allowed = allowed_arguments.get(function_name, set())
-
-            function_args = {
-                key: value
-                for key, value in function_args.items()
-                if key in allowed
-            }
-
+            function_args = json.loads(tool_call.function.arguments)
             function_to_call = available_functions[function_name]
 
-            if function_name in {
-                "get_business_dashboard",
-                "get_hero_products",
-                "get_weak_products",
-                "list_customers"
-            }:
-                result = function_to_call(
-                    db,
-                    business_id=business_id
-                )
+            # Never trust business_id coming from the LLM.
+            # Always use the authenticated user's business_id.
+            function_args.pop("business_id", None)
 
-            elif function_name in {
-                "get_customer_profile",
-                "predict_next_purchase"
-            }:
-                if "customer_id" not in function_args:
-                    result = {
-                        "error": "Customer ID is required for this request."
-                    }
-                else:
-                    result = function_to_call(
-                        db,
-                        customer_id=function_args["customer_id"],
-                        business_id=business_id
-                    )
-
-            else:
-                result = {
-                    "error": "Unknown tool."
-                }
+            result = function_to_call(
+                db,
+                business_id=business_id,
+                **function_args
+            )
 
             messages.append({
                 "tool_call_id": tool_call.id,
@@ -181,21 +116,18 @@ def copilot(question, db, business_id, history=None):
 
     messages.append({
         "role": "system",
-        "content": (
-            "Explain the tool result in clean, simple, user-friendly plain text. "
-            "All monetary values are in Indian Rupees (₹), not dollars. "
-            "Do not use Markdown. "
-            "Do not use *, **, #, tables, pipes, or JSON. "
-            "Do not include escape characters such as \\n. "
-            "Use short paragraphs instead of bullet points. "
-            "Return only the final answer."
-        )
+        "content": """Explain the tool result in clean, simple, user-friendly plain text.
+All monetary values are in Indian Rupees (₹), not dollars — always refer to them as rupees.
+Do not use Markdown.
+Do not use *, **, #, tables, pipes, or JSON.
+Do not include escape characters such as \\n.
+Use short paragraphs instead of bullet points.
+Return only the final answer."""
     })
 
-    final_response = client.chat.completions.create(
-        model="openai/gpt-oss-120b",
-        messages=messages,
-        tool_choice="none"
-    )
+    final_message = call_groq_with_retry(messages, tool_choice="none")
 
-    return final_response.choices[0].message.content
+    if final_message is None:
+        return "Sorry, I had trouble finalizing that answer. Please try again."
+
+    return final_message.content
