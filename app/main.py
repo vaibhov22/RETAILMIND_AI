@@ -1,4 +1,4 @@
-from fastapi import FastAPI, File, UploadFile, Depends
+from fastapi import FastAPI, File, UploadFile, Depends, HTTPException
 from datetime import datetime
 from schemas import InvoiceExtraction, CustomerProfileUpdate, CopilotRequest
 from groq import Groq
@@ -88,6 +88,16 @@ async def upload_invoice(
             invoiceExtraction = InvoiceExtraction.model_validate_json(
                 json_data
             )
+            existing_invoice = db.query(Invoice).filter(
+            Invoice.invoice_id == invoiceExtraction.invoice_id,
+            Invoice.business_id == business.business_id
+            ).first()
+
+            if existing_invoice:
+             raise HTTPException(
+                status_code=409,
+                detail=f"Invoice {invoiceExtraction.invoice_id} has already been uploaded."
+    )
 
             parsed_date = None
 
@@ -164,8 +174,11 @@ async def upload_invoice(
                 "needs_profile_questions": needs_profile
             }
 
+        except HTTPException:
+            raise
+
         except Exception as e:
-            print("Validation failed:")
+            print("Validation failed:", e)
             return {"error": str(e)}
 
     finally:

@@ -40,9 +40,25 @@ class Product(Base):
 
 class InvoiceItem(Base):
     __tablename__ = "invoice_items"
-    business_id = Column(Integer)
-    invoice_id = Column(String(10), ForeignKey("invoices.invoice_id"), primary_key=True)
-    product_id = Column(String(10), ForeignKey("products.product_id"), primary_key=True)
+
+    business_id = Column(
+        Integer,
+        ForeignKey("businesses.business_id"),
+        primary_key=True
+    )
+
+    invoice_id = Column(
+        String(10),
+        ForeignKey("invoices.invoice_id"),
+        primary_key=True
+    )
+
+    product_id = Column(
+        String(10),
+        ForeignKey("products.product_id"),
+        primary_key=True
+    )
+
     quantity = Column(Integer)
     unit_price = Column(DECIMAL(10, 2))
     total_price = Column(DECIMAL(10, 2))
