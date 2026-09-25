@@ -1,4 +1,4 @@
-from models import Customer, Product, InvoiceItem, Invoice, Business
+from app.models import Customer, Product, InvoiceItem, Invoice, Business
 from database import SessionLocal
 from sqlalchemy import func
 from datetime import date, timedelta
