@@ -36,9 +36,10 @@ from fastapi.middleware.cors import CORSMiddleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:3000",
-        "https://retailmind-ai.vercel.app",
-    ],
+    "http://localhost:3000",
+    "https://retailmind-ai.vercel.app",
+    "https://retailmind-ai-eight.vercel.app",
+     ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
