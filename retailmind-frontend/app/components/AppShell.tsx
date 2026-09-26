@@ -13,6 +13,7 @@ const navigation = [
   { name: "Credit / Udhaar", path: "/credit-overview", icon: "₹" },
   { name: "Product Bundles", path: "/product-bundles", icon: "⌘" },
   { name: "Inventory Signals", path: "/inventory-signals", icon: "▤" },
+  { name: "Copilot", path: "/copilot", icon: "✦" },
 ];
 
 export default function AppShell({
@@ -24,6 +25,7 @@ export default function AppShell({
   const router = useRouter();
 
   const [profileOpen, setProfileOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [email, setEmail] = useState("");
 
   const profileRef = useRef<HTMLDivElement>(null);
@@ -59,6 +61,10 @@ export default function AppShell({
     };
   }, []);
 
+  useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [pathname]);
+
   if (pathname === "/") {
     return <>{children}</>;
   }
@@ -66,6 +72,7 @@ export default function AppShell({
   async function handleLogout() {
     await supabase.auth.signOut();
     setProfileOpen(false);
+    setMobileMenuOpen(false);
     router.push("/");
   }
 
@@ -148,25 +155,39 @@ export default function AppShell({
       {/* =========================
           MOBILE TOP BAR
       ========================== */}
-      <header className="flex h-16 items-center justify-between border-b border-gray-200 bg-white px-4 lg:hidden">
+      <header className="sticky top-0 z-40 flex h-16 items-center justify-between border-b border-gray-200 bg-white px-4 lg:hidden">
 
-        <button
-          onClick={() => router.push("/dashboard")}
-          className="flex items-center gap-2"
-        >
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-600 font-bold text-white">
-            R
-          </div>
+        {/* Hamburger + Logo */}
+        <div className="flex items-center gap-3">
 
-          <span className="font-bold text-gray-900">
-            RetailMind
-          </span>
-        </button>
+          <button
+            onClick={() => setMobileMenuOpen(true)}
+            aria-label="Open navigation"
+            className="flex h-10 w-10 items-center justify-center rounded-xl text-xl text-gray-700 hover:bg-gray-100"
+          >
+            ☰
+          </button>
 
+          <button
+            onClick={() => router.push("/dashboard")}
+            className="flex items-center gap-2"
+          >
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-600 font-bold text-white">
+              R
+            </div>
+
+            <span className="font-bold text-gray-900">
+              RetailMind AI
+            </span>
+          </button>
+
+        </div>
+
+        {/* Profile */}
         <div ref={profileRef} className="relative">
           <button
             onClick={() => setProfileOpen((open) => !open)}
-            className="flex h-10 w-10 items-center justify-center rounded-full bg-[#111827] text-sm font-bold text-white"
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-[#111827] text-xs font-bold text-white"
           >
             VS
           </button>
@@ -181,6 +202,128 @@ export default function AppShell({
       </header>
 
       {/* =========================
+          MOBILE NAVIGATION DRAWER
+      ========================== */}
+
+      {mobileMenuOpen && (
+        <div className="fixed inset-0 z-[60] lg:hidden">
+
+          {/* Overlay */}
+          <button
+            aria-label="Close navigation"
+            onClick={() => setMobileMenuOpen(false)}
+            className="absolute inset-0 bg-black/40"
+          />
+
+          {/* Drawer */}
+          <aside className="relative flex h-full w-[290px] max-w-[85vw] flex-col bg-white shadow-2xl">
+
+            {/* Drawer Header */}
+            <div className="flex h-20 items-center justify-between border-b border-gray-100 px-5">
+
+              <button
+                onClick={() => {
+                  router.push("/dashboard");
+                  setMobileMenuOpen(false);
+                }}
+                className="flex items-center gap-3"
+              >
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600 text-lg font-bold text-white">
+                  R
+                </div>
+
+                <div className="text-left">
+                  <p className="font-bold tracking-tight text-gray-900">
+                    RetailMind AI
+                  </p>
+
+                  <p className="text-[10px] text-gray-400">
+                    Business Intelligence
+                  </p>
+                </div>
+              </button>
+
+              <button
+                onClick={() => setMobileMenuOpen(false)}
+                aria-label="Close navigation"
+                className="flex h-9 w-9 items-center justify-center rounded-lg text-xl text-gray-500 hover:bg-gray-100"
+              >
+                ×
+              </button>
+
+            </div>
+
+            {/* Navigation */}
+            <nav className="flex-1 overflow-y-auto px-3 py-5">
+
+              <p className="mb-3 px-3 text-[10px] font-semibold uppercase tracking-widest text-gray-400">
+                Workspace
+              </p>
+
+              <div className="space-y-1">
+                {navigation.map((item) => {
+                  const active = pathname === item.path;
+
+                  return (
+                    <button
+                      key={item.path}
+                      onClick={() => {
+                        router.push(item.path);
+                        setMobileMenuOpen(false);
+                      }}
+                      className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-medium transition ${
+                        active
+                          ? "bg-blue-50 text-blue-700"
+                          : "text-gray-600 hover:bg-gray-50"
+                      }`}
+                    >
+                      <span
+                        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${
+                          active
+                            ? "bg-blue-100 text-blue-700"
+                            : "bg-gray-50 text-gray-500"
+                        }`}
+                      >
+                        {item.icon}
+                      </span>
+
+                      {item.name}
+                    </button>
+                  );
+                })}
+              </div>
+
+            </nav>
+
+            {/* Logout */}
+            <div className="border-t border-gray-100 p-4">
+
+              <button
+                onClick={handleLogout}
+                className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left hover:bg-red-50"
+              >
+                <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-red-50 text-red-600">
+                  ↪
+                </span>
+
+                <div>
+                  <p className="text-sm font-medium text-red-600">
+                    Sign out
+                  </p>
+
+                  <p className="text-xs text-gray-400">
+                    End your current session
+                  </p>
+                </div>
+              </button>
+
+            </div>
+
+          </aside>
+        </div>
+      )}
+
+      {/* =========================
           MAIN CONTENT
       ========================== */}
       <main className="min-h-screen lg:pl-64">
@@ -193,7 +336,7 @@ export default function AppShell({
       <button
         onClick={() => router.push("/copilot")}
         aria-label="Open RetailMind AI Copilot"
-        className="fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-full bg-blue-600 px-4 py-3 text-sm font-semibold text-white shadow-xl shadow-blue-600/25 transition-all duration-200 hover:scale-105 hover:bg-blue-700 hover:shadow-2xl"
+        className="fixed bottom-5 right-5 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-blue-600 text-white shadow-xl shadow-blue-600/25 transition-all duration-200 hover:scale-105 hover:bg-blue-700 sm:bottom-6 sm:right-6 sm:h-auto sm:w-auto sm:gap-3 sm:px-4 sm:py-3"
       >
         <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white/15 text-lg">
           ✦
@@ -220,7 +363,7 @@ function ProfileMenu({
   onLogout: () => void;
 }) {
   return (
-    <div className="absolute right-0 top-12 z-50 w-72 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-xl">
+    <div className="absolute right-0 top-12 z-50 w-72 max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-xl">
 
       <div className="border-b border-gray-100 px-5 py-5">
         <div className="flex items-center gap-3">
