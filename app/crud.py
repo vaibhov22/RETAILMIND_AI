@@ -303,7 +303,8 @@ def predict_next_purchase(db, customer_id, business_id):
             Invoice.invoice_date
         ).filter(
             Invoice.customer_id == customer_id,
-            Invoice.business_id == business_id
+            Invoice.business_id == business_id,
+            Invoice.invoice_date.isnot(None)
         ).order_by(
             Invoice.invoice_date
         ).all()
