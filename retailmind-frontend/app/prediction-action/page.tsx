@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
 const API_URL = "https://retailmind-ai-7h7v.onrender.com";
@@ -28,7 +28,10 @@ type Action = {
 
 export default function PredictionAction() {
   const [search, setSearch] = useState("");
+
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [allCustomers, setAllCustomers] = useState<Customer[]>([]);
+
   const [selectedCustomer, setSelectedCustomer] =
     useState<Customer | null>(null);
 
@@ -42,30 +45,32 @@ export default function PredictionAction() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  const [showCustomers, setShowCustomers] = useState(false);
+
+  const searchRef = useRef<HTMLDivElement>(null);
+
   // =========================================
-  // SEARCH CUSTOMERS BY NAME
+  // GET AUTH TOKEN
   // =========================================
 
-  async function searchCustomers(value: string) {
-    setSearch(value);
-    setSelectedCustomer(null);
-    setPrediction(null);
-    setAction(null);
-    setError("");
+  async function getToken() {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
 
-    if (!value.trim()) {
-      setCustomers([]);
-      return;
-    }
+    return session?.access_token;
+  }
 
+  // =========================================
+  // LOAD ALL CUSTOMERS
+  // =========================================
+
+  async function loadAllCustomers() {
     try {
       setSearching(true);
+      setError("");
 
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-
-      const token = session?.access_token;
+      const token = await getToken();
 
       if (!token) {
         setError(
@@ -74,10 +79,13 @@ export default function PredictionAction() {
         return;
       }
 
+      /*
+       * "%" becomes "%%" in the backend ILIKE query,
+       * which returns all customers belonging to the
+       * authenticated business.
+       */
       const response = await fetch(
-        `${API_URL}/customer-search?name=${encodeURIComponent(
-          value
-        )}`,
+        `${API_URL}/customer-search?name=${encodeURIComponent("%")}`,
         {
           method: "GET",
           headers: {
@@ -102,24 +110,89 @@ export default function PredictionAction() {
         return;
       }
 
-      const results = Array.isArray(data)
+      const results: Customer[] = Array.isArray(data)
         ? data
         : data?.customers || [];
 
+      setAllCustomers(results);
+
+      // Show all customers initially.
       setCustomers(results);
 
     } catch (err) {
       console.error(
-        "Customer search error:",
+        "Load customers error:",
         err
       );
 
       setError(
-        "Failed to search customers."
+        "Failed to load customers."
       );
 
     } finally {
       setSearching(false);
+    }
+  }
+
+  // =========================================
+  // FILTER CUSTOMERS LOCALLY
+  // =========================================
+
+  function filterCustomers(value: string) {
+    const query = value.trim().toLowerCase();
+
+    if (!query) {
+      setCustomers(allCustomers);
+      return;
+    }
+
+    const filtered = allCustomers.filter(
+      (customer) => {
+        const name =
+          customer.name?.toLowerCase() || "";
+
+        const phone =
+          customer.phone?.toLowerCase() || "";
+
+        return (
+          name.includes(query) ||
+          phone.includes(query)
+        );
+      }
+    );
+
+    setCustomers(filtered);
+  }
+
+  // =========================================
+  // HANDLE SEARCH INPUT
+  // =========================================
+
+  function handleSearchChange(value: string) {
+    setSearch(value);
+    setSelectedCustomer(null);
+    setPrediction(null);
+    setAction(null);
+    setError("");
+    setShowCustomers(true);
+
+    filterCustomers(value);
+  }
+
+  // =========================================
+  // OPEN CUSTOMER LIST
+  // =========================================
+
+  async function handleSearchFocus() {
+    setShowCustomers(true);
+
+    /*
+     * Load all customers only the first time.
+     */
+    if (allCustomers.length === 0) {
+      await loadAllCustomers();
+    } else {
+      filterCustomers(search);
     }
   }
 
@@ -129,12 +202,49 @@ export default function PredictionAction() {
 
   function selectCustomer(customer: Customer) {
     setSelectedCustomer(customer);
-    setSearch(customer.name || "");
+
+    setSearch(
+      customer.name ||
+        customer.phone ||
+        ""
+    );
+
     setCustomers([]);
+    setShowCustomers(false);
+
     setPrediction(null);
     setAction(null);
     setError("");
   }
+
+  // =========================================
+  // CLOSE DROPDOWN WHEN CLICKING OUTSIDE
+  // =========================================
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (
+        searchRef.current &&
+        !searchRef.current.contains(
+          event.target as Node
+        )
+      ) {
+        setShowCustomers(false);
+      }
+    }
+
+    document.addEventListener(
+      "mousedown",
+      handleClickOutside
+    );
+
+    return () => {
+      document.removeEventListener(
+        "mousedown",
+        handleClickOutside
+      );
+    };
+  }, []);
 
   // =========================================
   // ANALYZE CUSTOMER
@@ -142,7 +252,9 @@ export default function PredictionAction() {
 
   async function getPredictionAndAction() {
     if (!selectedCustomer) {
-      setError("Please select a customer first.");
+      setError(
+        "Please select a customer first."
+      );
       return;
     }
 
@@ -152,11 +264,7 @@ export default function PredictionAction() {
     setAction(null);
 
     try {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-
-      const token = session?.access_token;
+      const token = await getToken();
 
       if (!token) {
         setError(
@@ -169,7 +277,8 @@ export default function PredictionAction() {
         Authorization: `Bearer ${token}`,
       };
 
-      const customerId = selectedCustomer.customer_id;
+      const customerId =
+        selectedCustomer.customer_id;
 
       // =========================================
       // CALL BOTH APIs
@@ -197,13 +306,14 @@ export default function PredictionAction() {
       ]);
 
       // =========================================
-      // PARSE PREDICTION RESPONSE
+      // PARSE PREDICTION
       // =========================================
 
       let predData: Prediction = {};
 
       try {
-        predData = await predResponse.json();
+        predData =
+          await predResponse.json();
       } catch {
         predData = {
           error:
@@ -212,13 +322,14 @@ export default function PredictionAction() {
       }
 
       // =========================================
-      // PARSE ACTION RESPONSE
+      // PARSE ACTION
       // =========================================
 
       let actionData: Action = {};
 
       try {
-        actionData = await actionResponse.json();
+        actionData =
+          await actionResponse.json();
       } catch {
         actionData = {
           error:
@@ -227,7 +338,7 @@ export default function PredictionAction() {
       }
 
       // =========================================
-      // PREDICTION ERROR
+      // PREDICTION ERRORS
       // =========================================
 
       if (!predResponse.ok) {
@@ -244,7 +355,7 @@ export default function PredictionAction() {
       }
 
       // =========================================
-      // ACTION ERROR
+      // ACTION ERRORS
       // =========================================
 
       if (!actionResponse.ok) {
@@ -317,7 +428,7 @@ export default function PredictionAction() {
   }
 
   // =========================================
-  // FORMAT STATUS SAFELY
+  // FORMAT STATUS
   // =========================================
 
   function formatStatus(status?: string) {
@@ -327,7 +438,10 @@ export default function PredictionAction() {
 
     return status
       .replace(/_/g, " ")
-      .replace(/\b\w/g, (c) => c.toUpperCase());
+      .replace(
+        /\b\w/g,
+        (c) => c.toUpperCase()
+      );
   }
 
   // =========================================
@@ -361,7 +475,7 @@ export default function PredictionAction() {
         </div>
 
         {/* =====================================
-            CUSTOMER SEARCH
+            CUSTOMER SELECTOR
         ====================================== */}
 
         <section className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm sm:p-6">
@@ -370,60 +484,106 @@ export default function PredictionAction() {
             Select Customer
           </label>
 
-          <div className="relative mt-3">
+          <div
+            ref={searchRef}
+            className="relative mt-3"
+          >
+
+            {/* Search Input */}
 
             <input
               type="text"
               value={search}
+              onFocus={handleSearchFocus}
               onChange={(e) =>
-                searchCustomers(e.target.value)
+                handleSearchChange(
+                  e.target.value
+                )
               }
               className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
               placeholder="Search customer by name..."
             />
 
-            {/* Searching */}
+            {/* Loading */}
 
             {searching && (
               <p className="mt-2 text-xs text-gray-500">
-                Searching customers...
+                Loading customers...
               </p>
             )}
 
             {/* =================================
-                CUSTOMER SUGGESTIONS
+                CUSTOMER DROPDOWN
             ================================== */}
 
-            {customers.length > 0 &&
+            {showCustomers &&
               !selectedCustomer && (
+                <div className="absolute left-0 right-0 top-full z-30 mt-2 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl">
 
-                <div className="absolute left-0 right-0 z-30 mt-2 max-h-64 overflow-y-auto rounded-xl border border-gray-200 bg-white shadow-xl">
+                  {/* Dropdown Header */}
 
-                  {customers.map((customer) => (
+                  <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
 
-                    <button
-                      key={customer.customer_id}
-                      type="button"
-                      onClick={() =>
-                        selectCustomer(customer)
-                      }
-                      className="block w-full border-b border-gray-100 px-4 py-3 text-left transition last:border-b-0 hover:bg-gray-50"
-                    >
+                    <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                      Customers
+                    </p>
 
-                      <p className="text-sm font-semibold text-gray-900">
-                        {customer.name ||
-                          "Unnamed Customer"}
-                      </p>
+                    <p className="text-xs text-gray-400">
+                      {customers.length} found
+                    </p>
 
-                      {customer.phone && (
-                        <p className="mt-1 text-xs text-gray-500">
-                          {customer.phone}
-                        </p>
+                  </div>
+
+                  {/* Scrollable List */}
+
+                  <div className="max-h-64 overflow-y-auto">
+
+                    {customers.length === 0 &&
+                      !searching && (
+                        <div className="px-4 py-6 text-center text-sm text-gray-500">
+                          No customers found.
+                        </div>
                       )}
 
-                    </button>
+                    {customers.map(
+                      (customer) => (
+                        <button
+                          key={
+                            customer.customer_id
+                          }
+                          type="button"
+                          onClick={() =>
+                            selectCustomer(
+                              customer
+                            )
+                          }
+                          className="flex w-full items-center justify-between border-b border-gray-100 px-4 py-3 text-left transition last:border-b-0 hover:bg-blue-50"
+                        >
 
-                  ))}
+                          <div className="min-w-0">
+
+                            <p className="truncate text-sm font-semibold text-gray-900">
+                              {customer.name ||
+                                "Unnamed Customer"}
+                            </p>
+
+                            {customer.phone && (
+                              <p className="mt-1 text-xs text-gray-500">
+                                {customer.phone}
+                              </p>
+                            )}
+
+                          </div>
+
+                          <span className="ml-3 shrink-0 text-xs font-medium text-blue-600">
+                            Select →
+                          </span>
+
+                        </button>
+                      )
+                    )}
+
+                  </div>
 
                 </div>
               )}
@@ -456,12 +616,21 @@ export default function PredictionAction() {
               <button
                 type="button"
                 onClick={() => {
-                  setSelectedCustomer(null);
+                  setSelectedCustomer(
+                    null
+                  );
+
                   setSearch("");
-                  setCustomers([]);
+
+                  setCustomers(
+                    allCustomers
+                  );
+
                   setPrediction(null);
                   setAction(null);
                   setError("");
+
+                  setShowCustomers(true);
                 }}
                 className="self-start text-xs font-semibold text-blue-700 hover:text-blue-900 sm:self-auto"
               >
@@ -477,8 +646,13 @@ export default function PredictionAction() {
 
           <button
             type="button"
-            onClick={getPredictionAndAction}
-            disabled={loading || !selectedCustomer}
+            onClick={
+              getPredictionAndAction
+            }
+            disabled={
+              loading ||
+              !selectedCustomer
+            }
             className="mt-5 w-full rounded-xl bg-blue-600 px-6 py-3 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {loading
@@ -505,6 +679,7 @@ export default function PredictionAction() {
             </p>
 
           </div>
+
         )}
 
         {/* =====================================
@@ -525,8 +700,9 @@ export default function PredictionAction() {
                 </h2>
 
                 <p className="mt-2 text-sm text-amber-800">
-                  Not enough purchase history yet for
-                  this customer (need at least 2 invoices).
+                  Not enough purchase history yet
+                  for this customer (need at least
+                  2 invoices).
                 </p>
 
               </div>
@@ -541,14 +717,13 @@ export default function PredictionAction() {
 
                 <div className="grid gap-4 md:grid-cols-3">
 
-                  {/* Average Interval */}
-
                   <StatCard
                     title="Avg. Purchase Interval"
                     value={
                       prediction.average_interval !==
                         undefined &&
-                      prediction.average_interval !== null
+                      prediction.average_interval !==
+                        null
                         ? `${Number(
                             prediction.average_interval
                           ).toFixed(1)} days`
@@ -556,22 +731,19 @@ export default function PredictionAction() {
                     }
                   />
 
-                  {/* Days Since Last Purchase */}
-
                   <StatCard
                     title="Days Since Last Purchase"
                     value={
                       prediction.days_since_last_bought !==
                         undefined &&
-                      prediction.days_since_last_bought !== null
+                      prediction.days_since_last_bought !==
+                        null
                         ? String(
                             prediction.days_since_last_bought
                           )
                         : "Unavailable"
                     }
                   />
-
-                  {/* Status */}
 
                   <StatCard
                     title="Status"
@@ -581,8 +753,6 @@ export default function PredictionAction() {
                   />
 
                 </div>
-
-                {/* Prediction Message */}
 
                 {prediction.message && (
 
@@ -603,7 +773,8 @@ export default function PredictionAction() {
         ====================================== */}
 
         {action &&
-          action.status !== "not_enough_data" &&
+          action.status !==
+            "not_enough_data" &&
           action.action && (
 
             <section className="mt-8">
@@ -619,10 +790,6 @@ export default function PredictionAction() {
                 </p>
 
               </div>
-
-              {/* =================================
-                  WHATSAPP MESSAGE
-              ================================== */}
 
               {action.whatsapp_message && (
 
@@ -654,7 +821,8 @@ export default function PredictionAction() {
                     type="button"
                     onClick={() =>
                       navigator.clipboard.writeText(
-                        action.whatsapp_message || ""
+                        action.whatsapp_message ||
+                          ""
                       )
                     }
                     className="mt-4 rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-gray-800"
@@ -663,6 +831,7 @@ export default function PredictionAction() {
                   </button>
 
                 </div>
+
               )}
 
             </section>
