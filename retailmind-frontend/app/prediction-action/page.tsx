@@ -5,6 +5,12 @@ import { supabase } from "@/lib/supabase";
 
 const API_URL = "https://retailmind-ai-7h7v.onrender.com";
 
+type Customer = {
+  customer_id: number;
+  name?: string;
+  phone?: string;
+};
+
 type Prediction = {
   status?: string;
   average_interval?: number;
@@ -21,7 +27,10 @@ type Action = {
 };
 
 export default function PredictionAction() {
-  const [customerId, setCustomerId] = useState("1");
+  const [search, setSearch] = useState("");
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [selectedCustomer, setSelectedCustomer] =
+    useState<Customer | null>(null);
 
   const [prediction, setPrediction] =
     useState<Prediction | null>(null);
@@ -29,16 +38,111 @@ export default function PredictionAction() {
   const [action, setAction] =
     useState<Action | null>(null);
 
+  const [searching, setSearching] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  async function getPredictionAndAction() {
-    // -----------------------------------------
-    // Validate Customer ID
-    // -----------------------------------------
+  // =========================================
+  // SEARCH CUSTOMERS BY NAME
+  // =========================================
 
-    if (!customerId || Number(customerId) < 1) {
-      setError("Please enter a valid Customer ID.");
+  async function searchCustomers(value: string) {
+    setSearch(value);
+    setSelectedCustomer(null);
+    setPrediction(null);
+    setAction(null);
+    setError("");
+
+    if (!value.trim()) {
+      setCustomers([]);
+      return;
+    }
+
+    try {
+      setSearching(true);
+
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      const token = session?.access_token;
+
+      if (!token) {
+        setError(
+          "Your session has expired. Please login again."
+        );
+        return;
+      }
+
+      const response = await fetch(
+        `${API_URL}/customer-search?name=${encodeURIComponent(
+          value
+        )}`,
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      let data: any = null;
+
+      try {
+        data = await response.json();
+      } catch {
+        data = null;
+      }
+
+      if (!response.ok) {
+        setError(
+          data?.error ||
+            `Customer search failed: ${response.status}`
+        );
+        return;
+      }
+
+      const results = Array.isArray(data)
+        ? data
+        : data?.customers || [];
+
+      setCustomers(results);
+
+    } catch (err) {
+      console.error(
+        "Customer search error:",
+        err
+      );
+
+      setError(
+        "Failed to search customers."
+      );
+
+    } finally {
+      setSearching(false);
+    }
+  }
+
+  // =========================================
+  // SELECT CUSTOMER
+  // =========================================
+
+  function selectCustomer(customer: Customer) {
+    setSelectedCustomer(customer);
+    setSearch(customer.name || "");
+    setCustomers([]);
+    setPrediction(null);
+    setAction(null);
+    setError("");
+  }
+
+  // =========================================
+  // ANALYZE CUSTOMER
+  // =========================================
+
+  async function getPredictionAndAction() {
+    if (!selectedCustomer) {
+      setError("Please select a customer first.");
       return;
     }
 
@@ -48,10 +152,6 @@ export default function PredictionAction() {
     setAction(null);
 
     try {
-      // -----------------------------------------
-      // Get Supabase session
-      // -----------------------------------------
-
       const {
         data: { session },
       } = await supabase.auth.getSession();
@@ -69,32 +169,36 @@ export default function PredictionAction() {
         Authorization: `Bearer ${token}`,
       };
 
-      // -----------------------------------------
-      // Call both APIs
-      // -----------------------------------------
+      const customerId = selectedCustomer.customer_id;
 
-      const [predResponse, actionResponse] =
-        await Promise.all([
-          fetch(
-            `${API_URL}/customer/${customerId}/prediction`,
-            {
-              method: "GET",
-              headers,
-            }
-          ),
+      // =========================================
+      // CALL BOTH APIs
+      // =========================================
 
-          fetch(
-            `${API_URL}/customer/${customerId}/next-best-action`,
-            {
-              method: "GET",
-              headers,
-            }
-          ),
-        ]);
+      const [
+        predResponse,
+        actionResponse,
+      ] = await Promise.all([
+        fetch(
+          `${API_URL}/customer/${customerId}/prediction`,
+          {
+            method: "GET",
+            headers,
+          }
+        ),
 
-      // -----------------------------------------
-      // Safely parse prediction response
-      // -----------------------------------------
+        fetch(
+          `${API_URL}/customer/${customerId}/next-best-action`,
+          {
+            method: "GET",
+            headers,
+          }
+        ),
+      ]);
+
+      // =========================================
+      // PARSE PREDICTION RESPONSE
+      // =========================================
 
       let predData: Prediction = {};
 
@@ -102,13 +206,14 @@ export default function PredictionAction() {
         predData = await predResponse.json();
       } catch {
         predData = {
-          error: "Invalid response received from prediction service.",
+          error:
+            "Invalid response received from prediction service.",
         };
       }
 
-      // -----------------------------------------
-      // Safely parse action response
-      // -----------------------------------------
+      // =========================================
+      // PARSE ACTION RESPONSE
+      // =========================================
 
       let actionData: Action = {};
 
@@ -121,9 +226,9 @@ export default function PredictionAction() {
         };
       }
 
-      // -----------------------------------------
-      // Handle prediction API errors
-      // -----------------------------------------
+      // =========================================
+      // PREDICTION ERROR
+      // =========================================
 
       if (!predResponse.ok) {
         setError(
@@ -138,9 +243,9 @@ export default function PredictionAction() {
         return;
       }
 
-      // -----------------------------------------
-      // Handle action API errors
-      // -----------------------------------------
+      // =========================================
+      // ACTION ERROR
+      // =========================================
 
       if (!actionResponse.ok) {
         setError(
@@ -155,9 +260,9 @@ export default function PredictionAction() {
         return;
       }
 
-      // -----------------------------------------
-      // Validate prediction response
-      // -----------------------------------------
+      // =========================================
+      // VALIDATE PREDICTION
+      // =========================================
 
       if (!predData.status) {
         console.error(
@@ -172,9 +277,9 @@ export default function PredictionAction() {
         return;
       }
 
-      // -----------------------------------------
-      // Validate action response
-      // -----------------------------------------
+      // =========================================
+      // VALIDATE ACTION
+      // =========================================
 
       if (!actionData.status) {
         console.error(
@@ -189,9 +294,9 @@ export default function PredictionAction() {
         return;
       }
 
-      // -----------------------------------------
-      // Store results
-      // -----------------------------------------
+      // =========================================
+      // SAVE RESULTS
+      // =========================================
 
       setPrediction(predData);
       setAction(actionData);
@@ -211,9 +316,9 @@ export default function PredictionAction() {
     }
   }
 
-  // -----------------------------------------
-  // Format prediction status safely
-  // -----------------------------------------
+  // =========================================
+  // FORMAT STATUS SAFELY
+  // =========================================
 
   function formatStatus(status?: string) {
     if (!status) {
@@ -225,70 +330,170 @@ export default function PredictionAction() {
       .replace(/\b\w/g, (c) => c.toUpperCase());
   }
 
+  // =========================================
+  // UI
+  // =========================================
+
   return (
-    <main className="min-h-screen bg-[#f7f9fc] px-6 py-10 text-gray-900">
+    <main className="min-h-screen bg-[#f7f9fc] px-4 py-6 text-gray-900 sm:px-6 sm:py-10">
+
       <div className="mx-auto max-w-6xl">
 
-        {/* =========================
+        {/* =====================================
             HEADER
-        ========================== */}
+        ====================================== */}
 
         <div className="mb-8">
+
           <p className="text-sm font-medium text-blue-600">
             Customer Intelligence
           </p>
 
-          <h1 className="mt-1 text-3xl font-bold tracking-tight">
+          <h1 className="mt-1 text-2xl font-bold tracking-tight sm:text-3xl">
             Prediction & Next Best Action
           </h1>
 
-          <p className="mt-2 text-sm text-gray-500">
-            Analyze a customer's purchase pattern and determine
-            the next action.
+          <p className="mt-2 max-w-2xl text-sm text-gray-500 sm:text-base">
+            Analyze a customer's purchase pattern and
+            determine the next action.
           </p>
+
         </div>
 
-        {/* =========================
-            CUSTOMER INPUT
-        ========================== */}
+        {/* =====================================
+            CUSTOMER SEARCH
+        ====================================== */}
 
-        <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+        <section className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm sm:p-6">
 
           <label className="block text-sm font-semibold text-gray-800">
-            Customer ID
+            Select Customer
           </label>
 
-          <div className="mt-3 flex flex-col gap-3 sm:flex-row">
+          <div className="relative mt-3">
 
             <input
-              type="number"
-              min="1"
-              value={customerId}
+              type="text"
+              value={search}
               onChange={(e) =>
-                setCustomerId(e.target.value)
+                searchCustomers(e.target.value)
               }
-              className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-              placeholder="Enter Customer ID"
+              className="w-full rounded-xl border border-gray-300 px-4 py-3 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              placeholder="Search customer by name..."
             />
 
-            <button
-              onClick={getPredictionAndAction}
-              disabled={loading}
-              className="whitespace-nowrap rounded-xl bg-blue-600 px-6 py-3 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {loading
-                ? "Analyzing..."
-                : "Get Prediction & Action"}
-            </button>
+            {/* Searching */}
+
+            {searching && (
+              <p className="mt-2 text-xs text-gray-500">
+                Searching customers...
+              </p>
+            )}
+
+            {/* =================================
+                CUSTOMER SUGGESTIONS
+            ================================== */}
+
+            {customers.length > 0 &&
+              !selectedCustomer && (
+
+                <div className="absolute left-0 right-0 z-30 mt-2 max-h-64 overflow-y-auto rounded-xl border border-gray-200 bg-white shadow-xl">
+
+                  {customers.map((customer) => (
+
+                    <button
+                      key={customer.customer_id}
+                      type="button"
+                      onClick={() =>
+                        selectCustomer(customer)
+                      }
+                      className="block w-full border-b border-gray-100 px-4 py-3 text-left transition last:border-b-0 hover:bg-gray-50"
+                    >
+
+                      <p className="text-sm font-semibold text-gray-900">
+                        {customer.name ||
+                          "Unnamed Customer"}
+                      </p>
+
+                      {customer.phone && (
+                        <p className="mt-1 text-xs text-gray-500">
+                          {customer.phone}
+                        </p>
+                      )}
+
+                    </button>
+
+                  ))}
+
+                </div>
+              )}
 
           </div>
+
+          {/* =====================================
+              SELECTED CUSTOMER
+          ====================================== */}
+
+          {selectedCustomer && (
+
+            <div className="mt-4 flex flex-col gap-3 rounded-xl border border-blue-200 bg-blue-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+
+              <div>
+
+                <p className="text-sm font-semibold text-blue-900">
+                  {selectedCustomer.name ||
+                    "Unnamed Customer"}
+                </p>
+
+                {selectedCustomer.phone && (
+                  <p className="mt-1 text-xs text-blue-700">
+                    {selectedCustomer.phone}
+                  </p>
+                )}
+
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedCustomer(null);
+                  setSearch("");
+                  setCustomers([]);
+                  setPrediction(null);
+                  setAction(null);
+                  setError("");
+                }}
+                className="self-start text-xs font-semibold text-blue-700 hover:text-blue-900 sm:self-auto"
+              >
+                Change
+              </button>
+
+            </div>
+          )}
+
+          {/* =====================================
+              ANALYZE BUTTON
+          ====================================== */}
+
+          <button
+            type="button"
+            onClick={getPredictionAndAction}
+            disabled={loading || !selectedCustomer}
+            className="mt-5 w-full rounded-xl bg-blue-600 px-6 py-3 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {loading
+              ? "Analyzing..."
+              : "Get Prediction & Action"}
+          </button>
+
         </section>
 
-        {/* =========================
+        {/* =====================================
             ERROR
-        ========================== */}
+        ====================================== */}
 
         {error && (
+
           <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
 
             <p className="font-semibold">
@@ -302,13 +507,16 @@ export default function PredictionAction() {
           </div>
         )}
 
-        {/* =========================
+        {/* =====================================
             PREDICTION
-        ========================== */}
+        ====================================== */}
 
         {prediction && (
+
           <>
-            {prediction.status === "not_enough_data" ? (
+
+            {prediction.status ===
+            "not_enough_data" ? (
 
               <div className="mt-8 rounded-2xl border border-amber-200 bg-amber-50 p-6">
 
@@ -317,8 +525,8 @@ export default function PredictionAction() {
                 </h2>
 
                 <p className="mt-2 text-sm text-amber-800">
-                  Not enough purchase history yet for this
-                  customer (need at least 2 invoices).
+                  Not enough purchase history yet for
+                  this customer (need at least 2 invoices).
                 </p>
 
               </div>
@@ -331,7 +539,7 @@ export default function PredictionAction() {
                   Purchase Prediction
                 </h2>
 
-                <div className="grid gap-5 md:grid-cols-3">
+                <div className="grid gap-4 md:grid-cols-3">
 
                   {/* Average Interval */}
 
@@ -377,19 +585,22 @@ export default function PredictionAction() {
                 {/* Prediction Message */}
 
                 {prediction.message && (
+
                   <div className="mt-5 rounded-2xl border border-blue-200 bg-blue-50 p-5 text-sm text-blue-900">
                     {prediction.message}
                   </div>
+
                 )}
 
               </section>
             )}
+
           </>
         )}
 
-        {/* =========================
+        {/* =====================================
             NEXT BEST ACTION
-        ========================== */}
+        ====================================== */}
 
         {action &&
           action.status !== "not_enough_data" &&
@@ -409,9 +620,9 @@ export default function PredictionAction() {
 
               </div>
 
-              {/* =========================
+              {/* =================================
                   WHATSAPP MESSAGE
-              ========================== */}
+              ================================== */}
 
               {action.whatsapp_message && (
 
@@ -424,20 +635,23 @@ export default function PredictionAction() {
                     </h3>
 
                     <p className="mt-1 text-xs text-gray-500">
-                      Copy this message and send it to
-                      the customer.
+                      Copy this message and send it
+                      to the customer.
                     </p>
 
                   </div>
 
                   <textarea
                     readOnly
-                    value={action.whatsapp_message}
+                    value={
+                      action.whatsapp_message
+                    }
                     rows={5}
                     className="w-full resize-none rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm text-gray-800 outline-none"
                   />
 
                   <button
+                    type="button"
                     onClick={() =>
                       navigator.clipboard.writeText(
                         action.whatsapp_message || ""
@@ -455,13 +669,14 @@ export default function PredictionAction() {
           )}
 
       </div>
+
     </main>
   );
 }
 
-/* =========================
+/* =========================================
    STAT CARD
-========================= */
+========================================= */
 
 function StatCard({
   title,
@@ -471,7 +686,7 @@ function StatCard({
   value: string;
 }) {
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+    <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-6">
 
       <p className="text-sm font-medium text-gray-500">
         {title}
