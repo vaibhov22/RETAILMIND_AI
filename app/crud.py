@@ -9,7 +9,30 @@ from uuid import uuid4
 # CUSTOMER
 # ============================================================
 
+def normalize_phone(phone):
+
+    if not phone:
+        return None
+
+    phone = str(phone).strip()
+
+    # Keep digits only.
+    digits = "".join(char for char in phone if char.isdigit())
+
+    # Convert Indian +91 / 91 format to standard 10-digit format.
+    if len(digits) == 12 and digits.startswith("91"):
+        digits = digits[2:]
+
+    # Convert 0XXXXXXXXXX format to standard 10-digit format.
+    elif len(digits) == 11 and digits.startswith("0"):
+        digits = digits[1:]
+
+    return digits
+
+
 def get_or_create_customer(db, name, phone, business_id):
+
+    phone = normalize_phone(phone)
 
     customer = db.query(Customer).filter(
         Customer.phone == phone,
