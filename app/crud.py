@@ -2,6 +2,7 @@ from models import Customer, Product, InvoiceItem, Invoice, Business
 from database import SessionLocal
 from sqlalchemy import func
 from datetime import date, timedelta
+from uuid import uuid4
 
 
 # ============================================================
@@ -81,8 +82,7 @@ def create_invoice(
 
     if invoice_id is None:
 
-        count = db.query(Invoice).count()
-        invoice_id = f"INV-AUTO-{count + 1:04d}"
+        invoice_id = f"INV-{uuid4().hex[:12].upper()}"
 
     else:
 
