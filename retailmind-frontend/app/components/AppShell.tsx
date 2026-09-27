@@ -139,16 +139,62 @@ export default function AppShell({
           })}
         </nav>
 
-        <div className="border-t border-gray-100 p-4">
-          <div className="rounded-xl bg-gray-50 px-3 py-3">
-            <p className="text-xs font-semibold text-gray-700">
-              RetailMind AI
-            </p>
+        <div className="relative border-t border-gray-100 p-4" ref={profileRef}>
+          <button
+            onClick={() => setProfileOpen((open) => !open)}
+            className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left transition hover:bg-gray-50"
+          >
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#111827] text-xs font-bold text-white">
+              VS
+            </div>
 
-            <p className="mt-1 text-[11px] text-gray-400">
-              Business Intelligence
-            </p>
-          </div>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-semibold text-gray-800">
+                Retailer Account
+              </p>
+
+              <p className="truncate text-[11px] text-gray-400">
+                {email || "Logged-in account"}
+              </p>
+            </div>
+
+            <span className="text-xs text-gray-400">
+              {profileOpen ? "⌃" : "⌄"}
+            </span>
+          </button>
+
+          {profileOpen && (
+            <div className="absolute bottom-20 left-4 right-4 z-50 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-xl">
+              <div className="border-b border-gray-100 px-4 py-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+                  Account
+                </p>
+
+                <p className="mt-1 truncate text-sm font-medium text-gray-800">
+                  {email || "Logged-in account"}
+                </p>
+              </div>
+
+              <button
+                onClick={handleLogout}
+                className="flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-red-50"
+              >
+                <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-red-50 text-red-600">
+                  ↪
+                </span>
+
+                <div>
+                  <p className="text-sm font-medium text-red-600">
+                    Sign out
+                  </p>
+
+                  <p className="text-xs text-gray-400">
+                    End your current session
+                  </p>
+                </div>
+              </button>
+            </div>
+          )}
         </div>
       </aside>
 
