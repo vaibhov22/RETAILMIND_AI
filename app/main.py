@@ -168,6 +168,9 @@ async def upload_invoice(
                 business.business_id
             )
 
+            # Commit only after the complete invoice has been created successfully.
+            db.commit()
+
             return {
                 "message": "Invoice saved successfully",
                 "invoice_id": invoice.invoice_id,
@@ -176,9 +179,11 @@ async def upload_invoice(
             }
 
         except HTTPException:
+            db.rollback()
             raise
 
         except Exception as e:
+            db.rollback()
             print("Validation failed:", e)
             return {"error": str(e)}
 

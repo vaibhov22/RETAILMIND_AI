@@ -25,7 +25,7 @@ def get_or_create_customer(db, name, phone, business_id):
     )
 
     db.add(customer)
-    db.commit()
+    db.flush()
     db.refresh(customer)
 
     return customer
@@ -58,7 +58,7 @@ def get_or_create_product(db, product_name, business_id):
     )
 
     db.add(product)
-    db.commit()
+    db.flush()
     db.refresh(product)
 
     return product
@@ -107,7 +107,7 @@ def create_invoice(
     )
 
     db.add(invoice)
-    db.commit()
+    db.flush()
     db.refresh(invoice)
 
     return invoice
@@ -140,7 +140,7 @@ def create_invoice_items(db, invoice_id, items_with_product_ids, business_id):
 
         db.add(invoiceItem)
 
-    db.commit()
+    db.flush()
     return True
 
 
