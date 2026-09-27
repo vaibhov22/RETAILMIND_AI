@@ -89,6 +89,66 @@ async def upload_invoice(
             invoiceExtraction = InvoiceExtraction.model_validate_json(
                 json_data
             )
+            if invoiceExtraction.total_amount < 0:
+                raise HTTPException(
+                    status_code=422,
+                    detail="Invoice total amount cannot be negative."
+                )
+
+            if invoiceExtraction.paid_amount is not None and invoiceExtraction.paid_amount < 0:
+                raise HTTPException(
+                    status_code=422,
+                    detail="Paid amount cannot be negative."
+                )
+
+            if invoiceExtraction.credit_amount is not None and invoiceExtraction.credit_amount < 0:
+                raise HTTPException(
+                    status_code=422,
+                    detail="Credit amount cannot be negative."
+                )
+
+            if (
+                invoiceExtraction.paid_amount is not None
+                and invoiceExtraction.paid_amount > invoiceExtraction.total_amount
+            ):
+                raise HTTPException(
+                    status_code=422,
+                    detail="Paid amount cannot exceed total invoice amount."
+                )
+
+            if (
+                invoiceExtraction.credit_amount is not None
+                and invoiceExtraction.credit_amount > invoiceExtraction.total_amount
+            ):
+                raise HTTPException(
+                    status_code=422,
+                    detail="Credit amount cannot exceed total invoice amount."
+    )
+            for item in invoiceExtraction.items:
+
+                if not item.product_name or not item.product_name.strip():
+                    raise HTTPException(
+                        status_code=422,
+                        detail="Product name cannot be empty."
+                    )
+
+                if item.quantity <= 0:
+                    raise HTTPException(
+                        status_code=422,
+                        detail="Product quantity must be greater than zero."
+                    )
+
+                if item.unit_price < 0:
+                    raise HTTPException(
+                        status_code=422,
+                        detail="Product unit price cannot be negative."
+                    )
+
+                if item.total_price < 0:
+                    raise HTTPException(
+                        status_code=422,
+                        detail="Product total price cannot be negative."
+                    )
             existing_invoice = db.query(Invoice).filter(
             Invoice.invoice_id == invoiceExtraction.invoice_id,
             Invoice.business_id == business.business_id
@@ -103,13 +163,22 @@ async def upload_invoice(
             parsed_date = None
 
             if invoiceExtraction.date:
-                try:
-                    parsed_date = datetime.strptime(
-                        invoiceExtraction.date,
-                        "%d-%m-%Y"
-                    ).date()
-                except ValueError:
-                    parsed_date = None
+                date_formats = [
+                    "%d-%m-%Y",
+                    "%d/%m/%Y",
+                    "%Y-%m-%d",
+                    "%d.%m.%Y"
+                ]
+
+                for date_format in date_formats:
+                    try:
+                        parsed_date = datetime.strptime(
+                            invoiceExtraction.date.strip(),
+                            date_format
+                        ).date()
+                        break
+                    except ValueError:
+                        continue
 
             customer = get_or_create_customer(
                 db,
@@ -453,6 +522,59 @@ def dashboard(
     finally:
         db.close()
 
+# ============================================================
+# SALES ANALYTICS
+# ============================================================
+
+@app.get("/sales-analytics")
+def sales_analytics(
+    start_date: str,
+    end_date: str,
+    user_id: str = Depends(get_current_user_id)
+):
+    db = SessionLocal()
+
+    try:
+        business = get_or_create_business(db, user_id)
+
+        try:
+            parsed_start_date = datetime.strptime(
+                start_date,
+                "%Y-%m-%d"
+            ).date()
+
+            parsed_end_date = datetime.strptime(
+                end_date,
+                "%Y-%m-%d"
+            ).date()
+
+        except ValueError:
+            raise HTTPException(
+                status_code=400,
+                detail="Dates must be in YYYY-MM-DD format."
+            )
+
+        if parsed_start_date > parsed_end_date:
+            raise HTTPException(
+                status_code=400,
+                detail="Start date cannot be after end date."
+            )
+
+        return get_sales_by_date_range(
+            db,
+            business.business_id,
+            parsed_start_date,
+            parsed_end_date
+        )
+
+    except HTTPException:
+        raise
+
+    except Exception as e:
+        return {"error": str(e)}
+
+    finally:
+        db.close()
 
 # ============================================================
 # COPILOT GET

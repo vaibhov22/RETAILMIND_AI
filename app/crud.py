@@ -449,8 +449,90 @@ def get_business_dashboard(db, business_id):
         "total_customers": total_customers,
         "average_order_value": average_order_value
     }
+# ============================================================
+# get_sales_by_date_range
+# ============================================================
+def get_sales_by_date_range(
+    db,
+    business_id,
+    start_date,
+    end_date
+):
 
+    filtered_invoices = db.query(
+        Invoice
+    ).filter(
+        Invoice.business_id == business_id,
+        Invoice.invoice_date.isnot(None),
+        Invoice.invoice_date >= start_date,
+        Invoice.invoice_date <= end_date
+    )
 
+    total_revenue = filtered_invoices.with_entities(
+        func.sum(Invoice.total_amount)
+    ).scalar() or 0
+
+    total_orders = filtered_invoices.with_entities(
+        func.count(Invoice.invoice_id)
+    ).scalar() or 0
+
+    total_customers = filtered_invoices.with_entities(
+        func.count(
+            func.distinct(Invoice.customer_id)
+        )
+    ).scalar() or 0
+
+    average_order_value = (
+        total_revenue / total_orders
+        if total_orders
+        else 0
+    )
+
+    top_products = db.query(
+        Product.product_name,
+        func.sum(
+            InvoiceItem.quantity
+        ).label("units_sold"),
+        func.sum(
+            InvoiceItem.total_price
+        ).label("revenue")
+    ).join(
+        InvoiceItem,
+        Product.product_id == InvoiceItem.product_id
+    ).join(
+        Invoice,
+        Invoice.invoice_id == InvoiceItem.invoice_id
+    ).filter(
+        Product.business_id == business_id,
+        InvoiceItem.business_id == business_id,
+        Invoice.business_id == business_id,
+        Invoice.invoice_date.isnot(None),
+        Invoice.invoice_date >= start_date,
+        Invoice.invoice_date <= end_date
+    ).group_by(
+        Product.product_name
+    ).order_by(
+        func.sum(
+            InvoiceItem.total_price
+        ).desc()
+    ).limit(5).all()
+
+    return {
+        "start_date": start_date,
+        "end_date": end_date,
+        "total_revenue": total_revenue,
+        "total_orders": total_orders,
+        "total_customers": total_customers,
+        "average_order_value": average_order_value,
+        "top_products": [
+            {
+                "product_name": product.product_name,
+                "units_sold": product.units_sold,
+                "revenue": product.revenue
+            }
+            for product in top_products
+        ]
+    }
 # ============================================================
 # HERO PRODUCTS
 # ============================================================
