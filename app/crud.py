@@ -828,3 +828,24 @@ def get_or_create_business(
     db.refresh(business)
 
     return business
+
+def get_public_business(db):
+    PUBLIC_DEMO_USER_ID = "retailmind-public-demo"
+
+    business = db.query(Business).filter(
+        Business.supabase_user_id == PUBLIC_DEMO_USER_ID
+    ).first()
+
+    if business:
+        return business
+
+    business = Business(
+        supabase_user_id=PUBLIC_DEMO_USER_ID,
+        business_name="RetailMind Public Demo"
+    )
+
+    db.add(business)
+    db.commit()
+    db.refresh(business)
+
+    return business

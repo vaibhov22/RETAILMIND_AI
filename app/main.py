@@ -1,17 +1,17 @@
-from fastapi import FastAPI, File, UploadFile, Depends, HTTPException
+from fastapi import FastAPI, File, UploadFile, HTTPException
 from datetime import datetime
 from schemas import InvoiceExtraction, CustomerProfileUpdate, CopilotRequest
 from groq import Groq
 from config import groq_vision_model, groq_api
 from models import Customer, Invoice, InvoiceItem, Product
 from database import SessionLocal
-from auth_backend import get_current_user_id
 from ai_helper import generate_prediction_message, generate_whatsapp_message
 from copiloit import copilot
 import base64
 
 from crud import (
     get_or_create_customer,
+    get_public_business,
     get_or_create_product,
     create_invoice,
     create_invoice_items,
@@ -25,7 +25,6 @@ from crud import (
     get_credit_overview,
     get_product_bundles,
     get_inventory_signals,
-    get_or_create_business,
     get_sales_by_date_range,
 )
 
@@ -52,13 +51,12 @@ app.add_middleware(
 
 @app.post("/upload-invoice")
 async def upload_invoice(
-    file: UploadFile = File(...),
-    user_id: str = Depends(get_current_user_id)
+    file: UploadFile = File(...)
 ):
     db = SessionLocal()
 
     try:
-        business = get_or_create_business(db, user_id)
+        business = get_public_business(db)
 
         image_bytes = await file.read()
         base64_image = base64.b64encode(image_bytes).decode("utf-8")
@@ -267,13 +265,12 @@ async def upload_invoice(
 
 @app.post("/update-customer-profile")
 def update_profile(
-    data: CustomerProfileUpdate,
-    user_id: str = Depends(get_current_user_id)
+    data: CustomerProfileUpdate
 ):
     db = SessionLocal()
 
     try:
-        business = get_or_create_business(db, user_id)
+        business = get_public_business(db)
 
         customer = update_customer_profile(
             db,
@@ -306,13 +303,12 @@ def update_profile(
 @app.get("/customer-search")
 def customer_search(
     phone: str = None,
-    name: str = None,
-    user_id: str = Depends(get_current_user_id)
+    name: str = None
 ):
     db = SessionLocal()
 
     try:
-        business = get_or_create_business(db, user_id)
+        business = get_public_business(db)
 
         query = db.query(Customer).filter(
             Customer.business_id == business.business_id
@@ -352,13 +348,12 @@ def customer_search(
 
 @app.get("/customer/{customer_id}")
 def customer_profile(
-    customer_id: int,
-    user_id: str = Depends(get_current_user_id)
+    customer_id: int
 ):
     db = SessionLocal()
 
     try:
-        business = get_or_create_business(db, user_id)
+        business = get_public_business(db)
 
         profile = get_customer_profile(
             db,
@@ -381,13 +376,12 @@ def customer_profile(
 
 @app.get("/customer/{customer_id}/prediction")
 def get_prediction(
-    customer_id: int,
-    user_id: str = Depends(get_current_user_id)
+    customer_id: int
 ):
     db = SessionLocal()
 
     try:
-        business = get_or_create_business(db, user_id)
+        business = get_public_business(db)
 
         prediction = predict_next_purchase(
             db,
@@ -421,13 +415,12 @@ def get_prediction(
 
 @app.get("/customer/{customer_id}/next-best-action")
 def next_best_action(
-    customer_id: int,
-    user_id: str = Depends(get_current_user_id)
+    customer_id: int
 ):
     db = SessionLocal()
 
     try:
-        business = get_or_create_business(db, user_id)
+        business = get_public_business(db)
 
         prediction = predict_next_purchase(
             db,
@@ -488,13 +481,11 @@ def next_best_action(
 # ============================================================
 
 @app.get("/dashboard")
-def dashboard(
-    user_id: str = Depends(get_current_user_id)
-):
+def dashboard():
     db = SessionLocal()
 
     try:
-        business = get_or_create_business(db, user_id)
+        business = get_public_business(db)
 
         summary = get_business_dashboard(
             db,
@@ -530,13 +521,12 @@ def dashboard(
 @app.get("/sales-analytics")
 def sales_analytics(
     start_date: str,
-    end_date: str,
-    user_id: str = Depends(get_current_user_id)
+    end_date: str
 ):
     db = SessionLocal()
 
     try:
-        business = get_or_create_business(db, user_id)
+        business = get_public_business(db)
 
         try:
             parsed_start_date = datetime.strptime(
@@ -583,13 +573,12 @@ def sales_analytics(
 
 @app.get("/copilot")
 def test_copilot(
-    question: str,
-    user_id: str = Depends(get_current_user_id)
+    question: str
 ):
     db = SessionLocal()
 
     try:
-        business = get_or_create_business(db, user_id)
+        business = get_public_business(db)
 
         return copilot(
             question,
@@ -606,13 +595,11 @@ def test_copilot(
 # ============================================================
 
 @app.get("/credit-overview")
-def credit_overview(
-    user_id: str = Depends(get_current_user_id)
-):
+def credit_overview():
     db = SessionLocal()
 
     try:
-        business = get_or_create_business(db, user_id)
+        business = get_public_business(db)
 
         return get_credit_overview(
             db,
@@ -631,13 +618,11 @@ def credit_overview(
 # ============================================================
 
 @app.get("/product-bundles")
-def product_bundles(
-    user_id: str = Depends(get_current_user_id)
-):
+def product_bundles():
     db = SessionLocal()
 
     try:
-        business = get_or_create_business(db, user_id)
+        business = get_public_business(db)
 
         return get_product_bundles(
             db,
@@ -656,13 +641,11 @@ def product_bundles(
 # ============================================================
 
 @app.get("/inventory-signals")
-def inventory_signals(
-    user_id: str = Depends(get_current_user_id)
-):
+def inventory_signals():
     db = SessionLocal()
 
     try:
-        business = get_or_create_business(db, user_id)
+        business = get_public_business(db)
 
         return get_inventory_signals(
             db,
@@ -682,13 +665,12 @@ def inventory_signals(
 
 @app.post("/copilot")
 def copilot_route(
-    data: CopilotRequest,
-    user_id: str = Depends(get_current_user_id)
+    data: CopilotRequest
 ):
     db = SessionLocal()
 
     try:
-        business = get_or_create_business(db, user_id)
+        business = get_public_business(db)
 
         return copilot(
             data.question,

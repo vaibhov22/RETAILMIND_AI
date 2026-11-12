@@ -1,8 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase";
 
 const API_URL = "https://retailmind-ai-7h7v.onrender.com";
 
@@ -45,8 +43,6 @@ type PeriodOption =
   | "custom";
 
 export default function Dashboard() {
-  const router = useRouter();
-
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -60,34 +56,12 @@ export default function Dashboard() {
   const [customStartDate, setCustomStartDate] = useState("");
   const [customEndDate, setCustomEndDate] = useState("");
 
-  async function getSessionToken() {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-
-    if (!session?.access_token) {
-      router.push("/");
-      return null;
-    }
-
-    return session.access_token;
-  }
-
   async function loadDashboard() {
     try {
       setError("");
 
-      const accessToken = await getSessionToken();
-
-      if (!accessToken) {
-        return;
-      }
-
       const response = await fetch(`${API_URL}/dashboard`, {
         method: "GET",
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
       });
 
       if (!response.ok) {
@@ -214,12 +188,6 @@ export default function Dashboard() {
       setSalesLoading(true);
       setSalesError("");
 
-      const accessToken = await getSessionToken();
-
-      if (!accessToken) {
-        return;
-      }
-
       let dates = getPeriodDates(selectedPeriod);
 
       if (selectedPeriod === "custom") {
@@ -250,9 +218,6 @@ export default function Dashboard() {
         `${API_URL}/sales-analytics?start_date=${dates.startDate}&end_date=${dates.endDate}`,
         {
           method: "GET",
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-          },
         }
       );
 
